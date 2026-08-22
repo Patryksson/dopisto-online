@@ -1,0 +1,16 @@
+{
+  "name": "dopisto-online",
+  "version": "1.0.0",
+  "description": "Dopišto — online slovní duel pro 2 hráče",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3"
+  }
+}
