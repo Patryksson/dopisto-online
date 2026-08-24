@@ -466,6 +466,10 @@ function renderRevealCountdown(data) {
     youAre: data.youAre,
     myName: loadNickname(),
     opponentName: data.opponent,
+    myElo: data.yourElo,
+    opponentElo: data.opponentElo,
+    token: data.token,
+    finished: false,
     turn: data.turn,
     timeLeft: data.timeLeft.slice(),
     turnTimer: data.mode === 'speed' ? 10000 : null,
@@ -477,7 +481,18 @@ function renderRevealCountdown(data) {
 
   app.innerHTML = `
     <div class="card">
-      <div class="countdown-label">Zadání kola · vs ${data.opponent}</div>
+      <div class="vs-row">
+        <div class="vs-side">
+          <div class="vs-name">${game.myName}</div>
+          <div class="vs-elo">${data.yourElo} ELO</div>
+        </div>
+        <div class="vs-sep">VS</div>
+        <div class="vs-side">
+          <div class="vs-name">${data.opponent}</div>
+          <div class="vs-elo">${data.opponentElo} ELO</div>
+        </div>
+      </div>
+      <div class="countdown-label">Zadání kola</div>
       ${patternTilesHtml(data.pattern, 'reveal')}
       <div class="countdown-num" id="countNum">3</div>
     </div>
@@ -510,6 +525,9 @@ function renderRevealCountdown(data) {
 }
 
 // ==== Herní obrazovka ====
+const REACTIONS = ['👍', '😂', '😮', '🔥', '😅', '🤔', '👏', '💀'];
+let lastReactionSentAt = 0;
+
 function renderGame() {
   const names = [null, null];
   names[game.youAre] = game.myName;
@@ -539,12 +557,25 @@ function renderGame() {
         <input id="wordInput" placeholder="${patternInputPlaceholder(game.pattern)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" />
         <button id="sendBtn">Odeslat</button>
       </div>
+      <div class="reaction-bar" id="reactionBar">
+        ${REACTIONS.map(e => `<button class="reaction-btn" data-emoji="${e}">${e}</button>`).join('')}
+      </div>
       <button id="giveUpBtn" class="secondary small" style="margin-top:10px">Vzdát kolo</button>
       <div class="feed" id="feed"></div>
     </div>
   `;
   updateClocksUI();
   document.getElementById('soundBtn').onclick = toggleSound;
+
+  document.querySelectorAll('.reaction-btn').forEach(btn => {
+    btn.onclick = () => {
+      const now = Date.now();
+      if (now - lastReactionSentAt < 1000) return; // stejný cooldown jako server
+      lastReactionSentAt = now;
+      socket.emit('send_reaction', { roomId: game.roomId, emoji: btn.dataset.emoji });
+      showReactionBubble(game.youAre, btn.dataset.emoji);
+    };
+  });
 
   const wordInput = document.getElementById('wordInput');
   document.getElementById('sendBtn').onclick = () => sendWord();
@@ -602,6 +633,16 @@ function flashPenalty(playerIdx) {
   }
 }
 
+function showReactionBubble(playerIdx, emoji) {
+  const clockEl = document.getElementById(`clock${playerIdx}`);
+  if (!clockEl) return;
+  const bubble = document.createElement('div');
+  bubble.className = 'reaction-bubble';
+  bubble.textContent = emoji;
+  clockEl.appendChild(bubble);
+  setTimeout(() => bubble.remove(), 1400);
+}
+
 // ==== Výsledková obrazovka ====
 function renderResult(data) {
   const my = data.results[game.youAre];
@@ -623,6 +664,12 @@ function renderResult(data) {
     else reasonText = 'Vzdal(a) jsi kolo.';
   }
 
+  const history = data.history || [];
+  const historyHtml = history.length ? history.map(h => {
+    const name = game.names[h.playerIdx];
+    return `<div class="p${h.playerIdx}">${name}: ${h.word}</div>`;
+  }).join('') : '<div style="color:var(--muted)">V tomto kole nepadlo žádné slovo.</div>';
+
   app.innerHTML = `
     <div class="card result">
       <h2 class="${iWon ? 'win' : 'lose'}">${iWon ? 'Vyhrál(a) jsi!' : 'Prohrál(a) jsi'}</h2>
@@ -637,6 +684,12 @@ function renderResult(data) {
           <div class="elo-line ${iWon ? 'lose' : 'win'}">${opp.before} → ${opp.after} (${opp.after >= opp.before ? '+' : ''}${opp.after - opp.before})</div>
         </div>
       </div>
+
+      <div class="rules">
+        <button type="button" class="rules-summary" data-panel="hist"><span class="ic">▤</span><span>Historie slov (${history.length})</span><span class="chevron">›</span></button>
+        <div class="rules-panel" id="panel-hist"><div class="rules-body feed" style="max-height:220px">${historyHtml}</div></div>
+      </div>
+
       <div class="menu-list" style="margin-top:20px">
         <button class="menu-item" id="againBtn"><span class="ic">🔎</span><span>Najít dalšího soupeře</span></button>
         <button class="secondary small" id="menuBtn" style="width:100%">Zpět do menu</button>
@@ -644,10 +697,26 @@ function renderResult(data) {
     </div>
   `;
 
+  document.querySelectorAll('.rules-summary').forEach(btn => {
+    btn.onclick = () => {
+      const panel = document.getElementById('panel-' + btn.dataset.panel);
+      const isOpen = btn.classList.contains('open');
+      if (isOpen) {
+        panel.style.maxHeight = '0px';
+        btn.classList.remove('open');
+      } else {
+        panel.style.maxHeight = panel.scrollHeight + 'px';
+        btn.classList.add('open');
+      }
+    };
+  });
+
   document.getElementById('againBtn').onclick = () => {
     const n = game.myName;
-    socket.emit('find_match', { nickname: n, mode: game.mode });
-    selectedMode = game.mode;
+    const mode = game.mode;
+    game = null;
+    socket.emit('find_match', { nickname: n, mode });
+    selectedMode = mode;
     renderSearching(n);
   };
   document.getElementById('menuBtn').onclick = () => { selectedMode = game.mode; game = null; renderMenu(); };
@@ -726,6 +795,13 @@ socket.on('state_update', (data) => {
   updateClocksUI();
 });
 
+socket.on('reaction', ({ playerIdx, emoji }) => {
+  if (!game) return;
+  // vlastní reakci si už zobrazujeme okamžitě při odeslání, ať nečeká na síť
+  if (playerIdx === game.youAre) return;
+  showReactionBubble(playerIdx, emoji);
+});
+
 socket.on('word_rejected', ({ reason, penaltyMs }) => {
   if (!game) return;
   const gameErr = document.getElementById('gameErr');
@@ -740,8 +816,87 @@ socket.on('word_rejected', ({ reason, penaltyMs }) => {
 
 socket.on('game_over', (data) => {
   if (!game) return;
+  game.finished = true;
   renderResult(data);
 });
+
+// ==== Reconnect logika ====
+
+// Vlastní odpojení — socket.io se pod kapotou sám pokouší znovu připojit,
+// my jen zobrazíme přehlednou hlášku a po obnovení spojení požádáme server
+// o návrat do rozehraného kola.
+socket.on('disconnect', () => {
+  if (game && !game.finished) showReconnectOverlay();
+});
+
+socket.on('connect', () => {
+  if (game && !game.finished && game.roomId) {
+    socket.emit('rejoin_room', { roomId: game.roomId, youAre: game.youAre, token: game.token });
+  }
+});
+
+socket.on('rejoin_success', (data) => {
+  hideReconnectOverlay();
+  game.turn = data.turn;
+  game.timeLeft = data.timeLeft;
+  game.turnTimer = data.turnTimer;
+  game.usedWordsCount = data.usedWordsCount;
+  game.lastWholeSecond = [999, 999];
+  game.lastHalfStep = [999, 999];
+  game.lastHalfStepTurn = 999;
+  renderGame();
+});
+
+socket.on('rejoin_failed', () => {
+  hideReconnectOverlay();
+  game = null;
+  renderMenu('Spojení se hrou se nepodařilo obnovit — kolo mezitím skončilo.');
+});
+
+// Soupeř (ne my) ztratil spojení.
+socket.on('opponent_disconnected', ({ graceMs }) => {
+  showOpponentDisconnectedBanner(graceMs);
+});
+socket.on('opponent_reconnected', () => {
+  hideOpponentDisconnectedBanner();
+});
+
+function showReconnectOverlay() {
+  let el = document.getElementById('reconnectOverlay');
+  if (el) return;
+  el = document.createElement('div');
+  el.id = 'reconnectOverlay';
+  el.className = 'reconnect-overlay';
+  el.innerHTML = `<div class="spinner"></div><p>Spojení přerušeno — pokouším se obnovit…</p>`;
+  document.body.appendChild(el);
+}
+function hideReconnectOverlay() {
+  const el = document.getElementById('reconnectOverlay');
+  if (el) el.remove();
+}
+
+let opponentGraceInterval = null;
+function showOpponentDisconnectedBanner(graceMs) {
+  hideOpponentDisconnectedBanner();
+  const cardEl = document.querySelector('.card');
+  if (!cardEl) return;
+  const banner = document.createElement('div');
+  banner.id = 'opponentDisconnectedBanner';
+  banner.className = 'disconnect-banner';
+  let secondsLeft = Math.ceil(graceMs / 1000);
+  banner.textContent = `Soupeř ztratil spojení — čekám na návrat (${secondsLeft} s)…`;
+  cardEl.prepend(banner);
+  opponentGraceInterval = setInterval(() => {
+    secondsLeft -= 1;
+    if (secondsLeft <= 0) { clearInterval(opponentGraceInterval); return; }
+    banner.textContent = `Soupeř ztratil spojení — čekám na návrat (${secondsLeft} s)…`;
+  }, 1000);
+}
+function hideOpponentDisconnectedBanner() {
+  if (opponentGraceInterval) { clearInterval(opponentGraceInterval); opponentGraceInterval = null; }
+  const banner = document.getElementById('opponentDisconnectedBanner');
+  if (banner) banner.remove();
+}
 
 renderMenu();
 

@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { isValidWord, generatePattern, matchesPattern, patternInstruction } = require('./dictionary');
 const store = require('./store');
 
@@ -10,8 +11,20 @@ const PENALTY_WRONG_PATTERN_MS = 3000;
 // Musí přibližně odpovídat délce odhalovací/odpočtové animace na klientu.
 const REVEAL_COUNTDOWN_MS = 3500;
 
+// Kolik času má hráč na znovupřipojení, než automaticky prohrává.
+const RECONNECT_GRACE_MS = 15000;
+
+// Emoji reakce — jen z pevného seznamu, ať nejde poslat libovolný text.
+const ALLOWED_REACTIONS = ['👍', '😂', '😮', '🔥', '😅', '🤔', '👏', '💀'];
+const REACTION_COOLDOWN_MS = 1000;
+
+// ELO matchmaking — tolerance rozdílu ELO se čím dál víc čekání rozšiřuje.
+const ELO_BASE_TOLERANCE = 100;
+const ELO_GROWTH_PER_SEC = 15;
+const ELO_MAX_TOLERANCE = 1000;
+
 const waitingQueue = { 2: [], 3: [], middle: [], speed: [] };
-const lobbies = new Map(); // code -> { socket, nickname, mode, timeout }
+const lobbies = new Map(); // code -> { socket, nickname, elo, mode, timeout }
 const rooms = new Map(); // roomId -> room state
 
 function removeFromQueues(socket) {
@@ -42,6 +55,35 @@ function generateCode() {
   return code;
 }
 
+// ==== ELO matchmaking fronta ====
+function tryMatchQueue(io, mode) {
+  const q = waitingQueue[mode];
+  const now = Date.now();
+  for (let i = 0; i < q.length; i++) {
+    for (let j = i + 1; j < q.length; j++) {
+      const a = q[i], b = q[j];
+      const waited = now - Math.min(a.joinedAt, b.joinedAt);
+      const tolerance = Math.min(ELO_MAX_TOLERANCE, ELO_BASE_TOLERANCE + ELO_GROWTH_PER_SEC * (waited / 1000));
+      if (Math.abs(a.elo - b.elo) <= tolerance) {
+        q.splice(j, 1);
+        q.splice(i, 1);
+        startMatch(io, a, b, mode);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function startMatchmakingLoop(io) {
+  setInterval(() => {
+    for (const mode of MODES) {
+      // ať se v jednom tiku spáruje případně i víc čekajících dvojic
+      while (tryMatchQueue(io, mode)) { /* pokračuj */ }
+    }
+  }, 1000);
+}
+
 function setupGame(io, socket) {
   socket.data.nickname = null;
   socket.data.lobbyCode = null;
@@ -51,14 +93,10 @@ function setupGame(io, socket) {
     socket.data.nickname = String(nickname).slice(0, 20);
     removeFromQueues(socket);
 
-    const q = waitingQueue[mode];
-    if (q.length > 0) {
-      const opponent = q.shift();
-      startMatch(io, opponent, { socket, nickname: socket.data.nickname }, mode);
-    } else {
-      q.push({ socket, nickname: socket.data.nickname });
-      socket.emit('waiting_for_opponent');
-    }
+    const elo = store.getProfile(mode, socket.data.nickname).elo;
+    waitingQueue[mode].push({ socket, nickname: socket.data.nickname, elo, joinedAt: Date.now() });
+    socket.emit('waiting_for_opponent');
+    tryMatchQueue(io, mode);
   });
 
   socket.on('cancel_find_match', () => {
@@ -70,6 +108,7 @@ function setupGame(io, socket) {
     socket.data.nickname = String(nickname).slice(0, 20);
     removeLobbyFor(socket);
 
+    const elo = store.getProfile(mode, socket.data.nickname).elo;
     const code = generateCode();
     const timeout = setTimeout(() => {
       if (lobbies.has(code)) {
@@ -77,7 +116,7 @@ function setupGame(io, socket) {
         socket.emit('lobby_expired');
       }
     }, 10 * 60 * 1000);
-    lobbies.set(code, { socket, nickname: socket.data.nickname, mode, timeout });
+    lobbies.set(code, { socket, nickname: socket.data.nickname, elo, mode, timeout });
     socket.data.lobbyCode = code;
     socket.emit('lobby_created', { code });
   });
@@ -97,9 +136,15 @@ function setupGame(io, socket) {
       return;
     }
     socket.data.nickname = String(nickname).slice(0, 20);
+    const joinerElo = store.getProfile(entry.mode, socket.data.nickname).elo;
     clearTimeout(entry.timeout);
     lobbies.delete(cleanCode);
-    startMatch(io, { socket: entry.socket, nickname: entry.nickname }, { socket, nickname: socket.data.nickname }, entry.mode);
+    startMatch(
+      io,
+      { socket: entry.socket, nickname: entry.nickname, elo: entry.elo },
+      { socket, nickname: socket.data.nickname, elo: joinerElo },
+      entry.mode
+    );
   });
 
   socket.on('submit_word', ({ roomId, word }) => {
@@ -129,6 +174,7 @@ function setupGame(io, socket) {
     }
 
     room.usedWords.add(clean);
+    room.history.push({ word: clean, playerIdx: idx });
     room.turn = 1 - idx;
     if (room.mode === 'speed') room.turnTimer = TURN_TIME_MS;
     broadcastState(io, room, { lastWord: clean, lastPlayerIdx: idx });
@@ -142,17 +188,93 @@ function setupGame(io, socket) {
     endRoom(io, room, 1 - idx, 'giveup');
   });
 
+  socket.on('send_reaction', ({ roomId, emoji }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.finished) return;
+    if (!ALLOWED_REACTIONS.includes(emoji)) return;
+    const idx = room.players.findIndex(p => p.socket.id === socket.id);
+    if (idx === -1) return;
+
+    const now = Date.now();
+    if (now - room.players[idx].lastReactionAt < REACTION_COOLDOWN_MS) return;
+    room.players[idx].lastReactionAt = now;
+
+    io.to(room.id).emit('reaction', { playerIdx: idx, emoji });
+  });
+
   socket.on('get_leaderboard', ({ mode }, cb) => {
     if (typeof cb === 'function') cb(store.leaderboard(mode));
+  });
+
+  // ==== Znovupřipojení do rozehraného kola ====
+  socket.on('rejoin_room', ({ roomId, youAre, token }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.finished) {
+      socket.emit('rejoin_failed');
+      return;
+    }
+    const slot = room.players[youAre];
+    if (!slot || slot.token !== token) {
+      socket.emit('rejoin_failed');
+      return;
+    }
+
+    slot.socket = socket;
+    slot.connected = true;
+    socket.join(roomId);
+
+    if (room.pendingDisconnect && room.pendingDisconnect.idx === youAre) {
+      clearTimeout(room.pendingDisconnect.timeout);
+      room.pendingDisconnect = null;
+      const opponent = room.players[1 - youAre];
+      if (opponent.connected) opponent.socket.emit('opponent_reconnected');
+      resumeTicking(io, room);
+    }
+
+    socket.emit('rejoin_success', {
+      mode: room.mode,
+      pattern: room.pattern,
+      opponent: room.players[1 - youAre].nickname,
+      turn: room.turn,
+      timeLeft: room.timeLeft,
+      turnTimer: room.turnTimer,
+      usedWordsCount: room.usedWords.size,
+    });
   });
 
   socket.on('disconnect', () => {
     removeFromQueues(socket);
     removeLobbyFor(socket);
+
     for (const room of rooms.values()) {
       if (room.finished) continue;
       const idx = room.players.findIndex(p => p.socket.id === socket.id);
-      if (idx !== -1) endRoom(io, room, 1 - idx, 'opponent_left');
+      if (idx === -1) continue;
+
+      const player = room.players[idx];
+      player.connected = false;
+
+      // Pokud je i druhý hráč právě odpojený (čeká na reconnect), nemá smysl
+      // dál čekat — kolo potichu zrušíme, není komu oznamovat výsledek.
+      if (room.pendingDisconnect && room.pendingDisconnect.idx === 1 - idx) {
+        clearTimeout(room.pendingDisconnect.timeout);
+        room.pendingDisconnect = null;
+        room.finished = true;
+        clearInterval(room.intervalId);
+        rooms.delete(room.id);
+        continue;
+      }
+
+      clearInterval(room.intervalId);
+      const opponent = room.players[1 - idx];
+      if (opponent.connected) {
+        opponent.socket.emit('opponent_disconnected', { graceMs: RECONNECT_GRACE_MS });
+      }
+
+      const timeout = setTimeout(() => {
+        endRoom(io, room, 1 - idx, 'opponent_left');
+      }, RECONNECT_GRACE_MS);
+      room.pendingDisconnect = { idx, timeout };
     }
   });
 }
@@ -168,16 +290,18 @@ function startMatch(io, a, b, mode) {
     mode,
     pattern,
     players: [
-      { socket: a.socket, nickname: a.nickname },
-      { socket: b.socket, nickname: b.nickname },
+      { socket: a.socket, nickname: a.nickname, elo: a.elo, connected: true, token: crypto.randomBytes(8).toString('hex'), lastReactionAt: 0 },
+      { socket: b.socket, nickname: b.nickname, elo: b.elo, connected: true, token: crypto.randomBytes(8).toString('hex'), lastReactionAt: 0 },
     ],
     turn: turnStart,
     usedWords: new Set(),
+    history: [],
     timeLeft: [bankTime, bankTime],
     turnTimer: mode === 'speed' ? TURN_TIME_MS : null,
     finished: false,
     lastTick: null,
     intervalId: null,
+    pendingDisconnect: null,
   };
   rooms.set(roomId, room);
 
@@ -185,20 +309,31 @@ function startMatch(io, a, b, mode) {
   b.socket.join(roomId);
 
   const basePayload = { roomId, mode, pattern, turn: turnStart, timeLeft: room.timeLeft, countdownMs: REVEAL_COUNTDOWN_MS };
-  a.socket.emit('match_found', { ...basePayload, opponent: b.nickname, youAre: 0 });
-  b.socket.emit('match_found', { ...basePayload, opponent: a.nickname, youAre: 1 });
+  a.socket.emit('match_found', {
+    ...basePayload, opponent: b.nickname, youAre: 0,
+    yourElo: a.elo, opponentElo: b.elo, token: room.players[0].token,
+  });
+  b.socket.emit('match_found', {
+    ...basePayload, opponent: a.nickname, youAre: 1,
+    yourElo: b.elo, opponentElo: a.elo, token: room.players[1].token,
+  });
 
   setTimeout(() => beginRoom(io, room), REVEAL_COUNTDOWN_MS);
 }
 
 function beginRoom(io, room) {
-  if (room.finished) return;
+  if (room.finished || room.pendingDisconnect) return;
+  resumeTicking(io, room);
+}
+
+function resumeTicking(io, room) {
+  clearInterval(room.intervalId);
   room.lastTick = Date.now();
   room.intervalId = setInterval(() => tickRoom(io, room), 200);
 }
 
 function tickRoom(io, room) {
-  if (room.finished) return;
+  if (room.finished || room.pendingDisconnect) return;
   const now = Date.now();
   const elapsed = now - room.lastTick;
   room.lastTick = now;
@@ -247,6 +382,10 @@ function endRoom(io, room, winnerIdx, reason) {
   if (room.finished) return;
   room.finished = true;
   clearInterval(room.intervalId);
+  if (room.pendingDisconnect) {
+    clearTimeout(room.pendingDisconnect.timeout);
+    room.pendingDisconnect = null;
+  }
 
   const loserIdx = 1 - winnerIdx;
   const winner = room.players[winnerIdx];
@@ -257,9 +396,9 @@ function endRoom(io, room, winnerIdx, reason) {
   results[winnerIdx] = { name: winner.nickname, before: before.winner, after: after.winner };
   results[loserIdx] = { name: loser.nickname, before: before.loser, after: after.loser };
 
-  io.to(room.id).emit('game_over', { reason, winnerIdx, results });
+  io.to(room.id).emit('game_over', { reason, winnerIdx, results, history: room.history });
 
   setTimeout(() => rooms.delete(room.id), 5000);
 }
 
-module.exports = { setupGame };
+module.exports = { setupGame, startMatchmakingLoop };
