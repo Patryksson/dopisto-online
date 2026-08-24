@@ -525,7 +525,7 @@ function renderRevealCountdown(data) {
 }
 
 // ==== Herní obrazovka ====
-const REACTIONS = ['👍', '😂', '😮', '🔥', '😅', '🤔', '👏', '💀'];
+const REACTIONS = ['👍', '😂', '🔥', '🤔', '💀', '⏳'];
 let lastReactionSentAt = 0;
 
 function renderGame() {

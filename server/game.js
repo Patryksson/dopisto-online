@@ -15,7 +15,7 @@ const REVEAL_COUNTDOWN_MS = 3500;
 const RECONNECT_GRACE_MS = 15000;
 
 // Emoji reakce — jen z pevného seznamu, ať nejde poslat libovolný text.
-const ALLOWED_REACTIONS = ['👍', '😂', '😮', '🔥', '😅', '🤔', '👏', '💀'];
+const ALLOWED_REACTIONS = ['👍', '😂', '🔥', '🤔', '💀', '⏳'];
 const REACTION_COOLDOWN_MS = 1000;
 
 // ELO matchmaking — tolerance rozdílu ELO se čím dál víc čekání rozšiřuje.

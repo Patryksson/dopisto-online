@@ -252,7 +252,7 @@ jde nasadit i na Railway.app, Fly.io nebo jiný Node.js hosting.)*
   kde skončila. Nestihne-li, prohrává on.
 - ELO se počítá zvlášť pro každý herní režim a je vázané na přezdívku
   (žádný účet) — ukládá se na serveru do `server/data/elo.json`.
-- Během hry můžeš soupeři poslat rychlou **emoji reakci** (👍😂😮🔥😅🤔👏💀) —
+- Během hry můžeš soupeři poslat rychlou **emoji reakci** (👍😂🔥🤔💀⏳) —
   vyskočí mu animovaně nad hodinami. Max. jedna za vteřinu, ať to nejde
   zaspamovat.
 - Na výsledkové obrazovce je sbalitelná **historie slov** celého kola —
