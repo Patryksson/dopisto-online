@@ -33,6 +33,12 @@
       radial-gradient(circle at 88% 92%, rgba(255,255,255,.05), transparent 50%),
       var(--paper);
   }
+
+  /* Na mobilu ať karta sedí nahoře, ne uprostřed — když vyjede klávesnice,
+     zbytečně to neplýtvá prostorem nad hrou a poslední slovo zůstane vidět. */
+  @media (max-width: 600px) {
+    body { align-items: flex-start; padding-top: 14px; padding-bottom: 14px; }
+  }
   .card {
     background: var(--paper); border-radius: 14px; padding: 20px 28px 32px;
     width: 100%; max-width: 460px; position: relative;
@@ -157,6 +163,20 @@
 
   .used-count { text-align: center; color: var(--muted); font-size: 12px; letter-spacing: .5px; margin-bottom: 10px; }
   .turn-banner { text-align: center; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; color: var(--muted); }
+
+  /* Poslední odehrané slovo — vždy hned nad polem pro psaní, ať ho hráč
+     stihne zahlédnout i s vyjetou klávesnicí na mobilu. */
+  .last-word {
+    text-align: center; font-size: 13px; font-weight: 700; letter-spacing: .5px;
+    min-height: 18px; margin-bottom: 8px;
+  }
+  .last-word.p0 { color: var(--win-ink); }
+  .last-word.p1 { color: var(--accent); }
+  .last-word.pop { animation: lastWordPop .3s ease; }
+  @keyframes lastWordPop {
+    0%   { transform: scale(1.12); }
+    100% { transform: scale(1); }
+  }
   .turn-banner span { color: var(--accent); font-weight: 600; }
 
   .word-input { display: flex; gap: 8px; }
@@ -319,6 +339,17 @@
     15%  { opacity: 1; transform: translate(-50%, -10px) scale(1.15); }
     75%  { opacity: 1; transform: translate(-50%, -34px) scale(1); }
     100% { opacity: 0; transform: translate(-50%, -46px) scale(.9); }
+  }
+
+  .bonus-popup {
+    position: absolute; bottom: -4px; right: 6px;
+    font-size: 15px; font-weight: 700; color: var(--win-ink); pointer-events: none;
+    animation: bonusFloat 1s ease-out forwards;
+  }
+  @keyframes bonusFloat {
+    0%   { opacity: 0; transform: translateY(0) scale(.7); }
+    20%  { opacity: 1; transform: translateY(-6px) scale(1.1); }
+    100% { opacity: 0; transform: translateY(-22px) scale(1); }
   }
 
   @media (max-width: 380px) {

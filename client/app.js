@@ -239,6 +239,9 @@ const RULES_HTML = `
   Každý režim má <b>vlastní, oddělený žebříček ELO</b>.<br><br>
   <b>Čas:</b> hlavní čas ubíhá jako u šachových hodin — jen tomu, kdo je na
   tahu. Dojde-li hráči čas, prohrává.<br><br>
+  <b>Bonus:</b> za každé správně odeslané slovo se ti k hlavnímu času přidá
+  <b>+3 s</b> (v režimu <b>Blitz</b> jen <b>+1 s</b>) — nejde ale přesáhnout
+  startovní hodnotu.<br><br>
   <b>Tresty:</b>
   <ul style="margin:6px 0; padding-left:18px">
     <li>Slovo, které <b>není ve slovníku</b> → −1 s</li>
@@ -302,9 +305,8 @@ function renderMenu(notice) {
         <div class="rules-panel" id="panel-p2"><div class="rules-body">${RULES_HTML}</div></div>
       </div>
 
-      <div class="rules">
-        <button type="button" class="rules-summary" data-panel="p3"><span class="ic">★</span><span>Žebříček — ${MODE_LABEL[selectedMode]}</span><span class="chevron">›</span></button>
-        <div class="rules-panel" id="panel-p3"><div class="rules-body" id="leaderboardBody">Načítám…</div></div>
+      <div class="menu-list">
+        <button class="menu-item" id="leaderboardLinkBtn"><span class="ic">★</span><span>Žebříček</span></button>
       </div>
 
       <div class="footer-tag">Dopišto · v1.0</div>
@@ -386,7 +388,42 @@ function renderMenu(notice) {
     renderJoining();
   };
 
-  socket.emit('get_leaderboard', { mode: selectedMode }, (list) => {
+  document.getElementById('leaderboardLinkBtn').onclick = () => renderLeaderboard(selectedMode);
+}
+
+// ==== Žebříček — samostatná stránka ====
+function renderLeaderboard(mode) {
+  app.innerHTML = `
+    <div class="card">
+      <h1 style="font-size:20px; letter-spacing:4px">★ Žebříček</h1>
+      <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
+
+      <div class="mode-select">
+        ${MODE_ORDER.map(m => `
+          <button class="menu-item ${mode === m ? 'active' : ''}" data-mode="${m}">
+            <span class="ic${m === 'speed' ? ' ic-lg' : ''}">${MODE_ICON[m]}</span><span>${MODE_LABEL[m]}</span>
+          </button>`).join('')}
+      </div>
+
+      <div id="leaderboardBody" style="min-height:60px">Načítám…</div>
+
+      <div class="menu-list" style="margin-top:18px">
+        <button class="secondary small" id="backToMenuBtn" style="width:100%">Zpět do menu</button>
+      </div>
+    </div>
+  `;
+
+  document.querySelectorAll('.mode-select button').forEach(btn => {
+    btn.onclick = () => {
+      const m = btn.dataset.mode;
+      const newMode = (m === '2' || m === '3') ? Number(m) : m;
+      selectedMode = newMode;
+      renderLeaderboard(newMode);
+    };
+  });
+  document.getElementById('backToMenuBtn').onclick = () => renderMenu();
+
+  socket.emit('get_leaderboard', { mode }, (list) => {
     const body = document.getElementById('leaderboardBody');
     if (!body) return; // uživatel mezitím přešel jinam
     body.innerHTML = list && list.length ? `
@@ -395,10 +432,7 @@ function renderMenu(notice) {
         <tbody>
           ${list.map((p, i) => `<tr><td>${i + 1}</td><td>${p.name}</td><td>${p.elo}</td><td>${p.wins}/${p.losses}</td></tr>`).join('')}
         </tbody>
-      </table>` : 'Zatím nikdo v tomto režimu nehrál.';
-    const panelBtn = document.querySelector('.rules-summary[data-panel="p3"]');
-    const panel = document.getElementById('panel-p3');
-    if (panelBtn && panelBtn.classList.contains('open')) panel.style.maxHeight = panel.scrollHeight + 'px';
+      </table>` : '<div style="color:var(--muted); text-align:center; padding:20px 0">Zatím nikdo v tomto režimu nehrál.</div>';
   });
 }
 
@@ -553,6 +587,7 @@ function renderGame() {
       <div class="error" id="gameErr"></div>
       ${turnTimerHtml}
       <div class="turn-banner">Na tahu: <span id="turnName">${names[game.turn]}</span></div>
+      <div class="last-word" id="lastWordBanner"></div>
       <div class="word-input">
         <input id="wordInput" placeholder="${patternInputPlaceholder(game.pattern)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" />
         <button id="sendBtn">Odeslat</button>
@@ -580,6 +615,16 @@ function renderGame() {
   const wordInput = document.getElementById('wordInput');
   document.getElementById('sendBtn').onclick = () => sendWord();
   wordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendWord(); });
+
+  // Když vyjede mobilní klávesnice, doscroluj, ať zůstane vidět "poslední
+  // slovo" panel i pole pro psaní — ne jen samotný input úplně dole.
+  wordInput.addEventListener('focus', () => {
+    setTimeout(() => {
+      const banner = document.getElementById('lastWordBanner');
+      (banner || wordInput).scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 300);
+  });
+
   wordInput.focus();
 
   document.getElementById('giveUpBtn').onclick = () => {
@@ -641,6 +686,16 @@ function showReactionBubble(playerIdx, emoji) {
   bubble.textContent = emoji;
   clockEl.appendChild(bubble);
   setTimeout(() => bubble.remove(), 1400);
+}
+
+function showBonusPopup(playerIdx, ms) {
+  const clockEl = document.getElementById(`clock${playerIdx}`);
+  if (!clockEl) return;
+  const el = document.createElement('div');
+  el.className = 'bonus-popup';
+  el.textContent = `+${(ms / 1000).toFixed(0)}s`;
+  clockEl.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
 }
 
 // ==== Výsledková obrazovka ====
@@ -790,6 +845,19 @@ socket.on('state_update', (data) => {
     if (usedCount) usedCount.textContent = `${patternInstruction(game.pattern)} · Použitá slova: ${data.usedWordsCount}`;
     const turnName = document.getElementById('turnName');
     if (turnName) turnName.textContent = game.names[game.turn];
+
+    const lastWordBanner = document.getElementById('lastWordBanner');
+    if (lastWordBanner) {
+      lastWordBanner.className = 'last-word p' + data.lastPlayerIdx;
+      lastWordBanner.textContent = `${game.names[data.lastPlayerIdx]}: ${data.lastWord}`;
+      lastWordBanner.classList.remove('pop');
+      void lastWordBanner.offsetWidth;
+      lastWordBanner.classList.add('pop');
+    }
+
+    if (data.bonusMs) {
+      showBonusPopup(data.bonusPlayerIdx, data.bonusMs);
+    }
   }
 
   updateClocksUI();

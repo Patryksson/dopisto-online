@@ -257,6 +257,10 @@ jde nasadit i na Railway.app, Fly.io nebo jiný Node.js hosting.)*
   zaspamovat.
 - Na výsledkové obrazovce je sbalitelná **historie slov** celého kola —
   kdo co napsal a v jakém pořadí.
+- Za každé **správně** odeslané slovo dostaneš **bonus k hlavnímu času**
+  (+3 s, v režimu Blitz +1 s) — nejde ale přesáhnout startovní hodnotu.
+- **Žebříček** je samostatná stránka dostupná z hlavního menu, s vlastním
+  přepínačem režimu.
 
 ---
 

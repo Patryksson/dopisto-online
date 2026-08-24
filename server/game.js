@@ -8,6 +8,9 @@ const TURN_TIME_MS = 10000;
 const PENALTY_NOT_IN_DICT_MS = 1000;
 const PENALTY_ALREADY_USED_MS = 3000;
 const PENALTY_WRONG_PATTERN_MS = 3000;
+// Bonus k hlavnímu času za každé správně odeslané slovo (nesmí přesáhnout
+// startovní hodnotu banky daného režimu).
+const BONUS_MS_BY_MODE = { 2: 3000, 3: 3000, middle: 3000, speed: 1000 };
 // Musí přibližně odpovídat délce odhalovací/odpočtové animace na klientu.
 const REVEAL_COUNTDOWN_MS = 3500;
 
@@ -175,9 +178,17 @@ function setupGame(io, socket) {
 
     room.usedWords.add(clean);
     room.history.push({ word: clean, playerIdx: idx });
+
+    // Bonus k hlavnímu času za správně odeslané slovo — nesmí přesáhnout
+    // startovní hodnotu banky daného režimu.
+    const bank = BANK_TIME_BY_MODE[room.mode];
+    const before = room.timeLeft[idx];
+    room.timeLeft[idx] = Math.min(bank, before + BONUS_MS_BY_MODE[room.mode]);
+    const bonusMs = room.timeLeft[idx] - before;
+
     room.turn = 1 - idx;
     if (room.mode === 'speed') room.turnTimer = TURN_TIME_MS;
-    broadcastState(io, room, { lastWord: clean, lastPlayerIdx: idx });
+    broadcastState(io, room, { lastWord: clean, lastPlayerIdx: idx, bonusMs, bonusPlayerIdx: idx });
   });
 
   socket.on('give_up', ({ roomId }) => {
