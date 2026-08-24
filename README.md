@@ -258,7 +258,7 @@ jde nasadit i na Railway.app, Fly.io nebo jiný Node.js hosting.)*
 - Na výsledkové obrazovce je sbalitelná **historie slov** celého kola —
   kdo co napsal a v jakém pořadí.
 - Za každé **správně** odeslané slovo dostaneš **bonus k hlavnímu času**
-  (+3 s, v režimu Blitz +1 s) — nejde ale přesáhnout startovní hodnotu.
+  (+3 s, v režimu 1 písmeno +1 s) — nejde ale přesáhnout startovní hodnotu.
 - **Žebříček** je samostatná stránka dostupná z hlavního menu, s vlastním
   přepínačem režimu.
 
@@ -276,7 +276,7 @@ server/
   data/
     words.txt              – český slovník (~250 000 slov)
     valid_prefixes2/3.json – použitelné dvojice/trojice písmen
-    valid_prefixes1.json   – použitelná písmena pro Blitz
+    valid_prefixes1.json   – použitelná písmena pro režim 1 písmeno
     valid_infix2.json      – dvojice použitelné kdekoliv ve slově (Uprostřed)
     elo.json                – vytvoří se automaticky při první odehrané hře
 client/

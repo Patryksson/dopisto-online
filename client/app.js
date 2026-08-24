@@ -36,9 +36,9 @@ function saveNickname(n) {
   localStorage.setItem('dopisto_nickname', n);
 }
 
-const MODE_LABEL = { 2: '2 písmena', speed: 'Blitz', 3: '3 písmena', middle: 'Uprostřed' };
-const MODE_ICON = { 2: 'Aa', speed: '⚡', 3: 'Abc', middle: '·A·' };
-const MODE_ORDER = [2, 'speed', 3, 'middle'];
+const MODE_LABEL = { speed: '1 písmeno', 2: '2 písmena', 3: '3 písmena', middle: 'Uprostřed' };
+const MODE_ICON = { speed: '⚡', 2: 'Aa', 3: 'Abc', middle: '·A·' };
+const MODE_ORDER = ['speed', 2, 3, 'middle'];
 
 // ==== Zvuk (Web Audio API — žádné externí soubory) ====
 let audioCtx = null;
@@ -228,10 +228,10 @@ const HOW_IT_WORKS_HTML = `
 const RULES_HTML = `
   <b>Režimy:</b>
   <ul style="margin:6px 0; padding-left:18px">
-    <li><b>2 písmena</b> — slovo musí <b>začínat</b> danou dvojicí (90 s na hráče).</li>
-    <li><b>Blitz</b> — jen 1 písmeno na začátku. Kromě 60 s hlavního času
+    <li><b>1 písmeno</b> — jen 1 písmeno na začátku. Kromě 60 s hlavního času
       má každý hráč na <b>každý jednotlivý tah jen 10 sekund</b> — nestihneš-li
       odpovědět včas, prohráváš okamžitě, i kdyby ti ještě zbýval hlavní čas.</li>
+    <li><b>2 písmena</b> — slovo musí <b>začínat</b> danou dvojicí (90 s na hráče).</li>
     <li><b>3 písmena</b> — slovo musí <b>začínat</b> danou trojicí (90 s na hráče).</li>
     <li><b>Uprostřed</b> — daná dvojice písmen se ve slově může nacházet
       <b>kdekoliv</b> — na začátku, uprostřed i na konci (90 s na hráče).</li>
@@ -240,7 +240,7 @@ const RULES_HTML = `
   <b>Čas:</b> hlavní čas ubíhá jako u šachových hodin — jen tomu, kdo je na
   tahu. Dojde-li hráči čas, prohrává.<br><br>
   <b>Bonus:</b> za každé správně odeslané slovo se ti k hlavnímu času přidá
-  <b>+3 s</b> (v režimu <b>Blitz</b> jen <b>+1 s</b>) — nejde ale přesáhnout
+  <b>+3 s</b> (v režimu <b>1 písmeno</b> jen <b>+1 s</b>) — nejde ale přesáhnout
   startovní hodnotu.<br><br>
   <b>Tresty:</b>
   <ul style="margin:6px 0; padding-left:18px">
@@ -305,8 +305,8 @@ function renderMenu(notice) {
         <div class="rules-panel" id="panel-p2"><div class="rules-body">${RULES_HTML}</div></div>
       </div>
 
-      <div class="menu-list">
-        <button class="menu-item" id="leaderboardLinkBtn"><span class="ic">★</span><span>Žebříček</span></button>
+      <div class="rules">
+        <button type="button" class="rules-summary" id="leaderboardLinkBtn"><span class="ic">★</span><span>Žebříček</span><span class="chevron">›</span></button>
       </div>
 
       <div class="footer-tag">Dopišto · v1.0</div>
