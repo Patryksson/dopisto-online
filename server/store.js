@@ -45,7 +45,7 @@ function recordResult(mode, winnerName, loserName) {
   return { before, after: { winner: newWinnerElo, loser: newLoserElo } };
 }
 
-function leaderboard(mode, limit = 50) {
+function leaderboard(mode, limit = 100) {
   const m = db[mode] || {};
   return Object.values(m)
     .sort((a, b) => b.elo - a.elo)

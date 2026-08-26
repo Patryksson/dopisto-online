@@ -11,6 +11,15 @@ function patternTilesHtml(pattern, extraClass) {
   return `<div class="${cls}">${letterTiles}<div class="letter-tile dim">···</div></div>`;
 }
 
+// Slovní fotbal nemá pevné zadání (žádná písmena k odhalení) — zvláštní blok.
+function patternDisplayBlock(pattern, extraClass) {
+  if (pattern.type === 'football') {
+    const cls = `letter-tiles${extraClass ? ' ' + extraClass : ''}`;
+    return `<div class="${cls}"><div class="letter-tile dim" style="width:auto; padding:0 18px; font-size:18px;">⚽</div></div>`;
+  }
+  return patternTilesHtml(pattern, extraClass);
+}
+
 function patternInstruction(pattern) {
   if (pattern.type === 'infix2') return `Slovo musí obsahovat "${pattern.value}" (kdekoliv).`;
   return `Slovo musí začínat na "${pattern.value}".`;
@@ -19,6 +28,26 @@ function patternInstruction(pattern) {
 function patternInputPlaceholder(pattern) {
   if (pattern.type === 'infix2') return `Napiš slovo obsahující '${pattern.value}'…`;
   return `Napiš slovo na '${pattern.value}'…`;
+}
+
+// Dynamické zadání pro Slovní fotbal — mění se každý tah podle posledního
+// odehraného slova.
+function currentInstructionText() {
+  if (game.mode === 'football') {
+    return game.requiredLetter
+      ? `Slovo musí začínat na "${game.requiredLetter}".`
+      : 'První slovo může být jakékoliv (jen podstatné jméno).';
+  }
+  return patternInstruction(game.pattern);
+}
+
+function currentPlaceholder() {
+  if (game.mode === 'football') {
+    return game.requiredLetter
+      ? `Napiš slovo na '${game.requiredLetter}'…`
+      : 'Napiš první slovo (podstatné jméno)…';
+  }
+  return patternInputPlaceholder(game.pattern);
 }
 
 function fmtTime(ms) {
@@ -36,9 +65,40 @@ function saveNickname(n) {
   localStorage.setItem('dopisto_nickname', n);
 }
 
-const MODE_LABEL = { speed: '1 písmeno', 2: '2 písmena', 3: '3 písmena', middle: 'Uprostřed' };
-const MODE_ICON = { speed: '⚡', 2: 'Aa', 3: 'Abc', middle: '·A·' };
-const MODE_ORDER = ['speed', 2, 3, 'middle'];
+const MODE_LABEL = { speed: '1 písmeno', 2: '2 písmena', football: 'Slovní fotbal', middle: 'Uprostřed' };
+const MODE_ICON = { speed: '⚡', 2: 'Aa', football: '⚽', middle: '·A·' };
+const MODE_ORDER = ['speed', 2, 'football', 'middle'];
+function isBigIcon(m) { return m === 'speed' || m === 'football'; }
+
+// Malý náhled zadání nad segmentovaným přepínačem, á la "[⚡P] [AA] [⚽] [·A·]".
+function modePreviewText(m) {
+  if (m === 2) return '[AA]';
+  if (m === 'speed') return '[⚡P]';
+  if (m === 'football') return '[⚽]';
+  return '[·A·]';
+}
+
+function modeSegmentedHtml(selected) {
+  return `
+    <div class="mode-preview-row">
+      ${MODE_ORDER.map(m => `<span class="${selected === m ? 'active' : ''}">${modePreviewText(m)}</span>`).join('')}
+    </div>
+    <div class="mode-segmented">
+      ${MODE_ORDER.map(m => `<button class="seg-btn ${selected === m ? 'active' : ''}" data-mode="${m}">${MODE_LABEL[m]}</button>`).join('')}
+    </div>
+  `;
+}
+
+function bindModeSegmented(onSelect) {
+  document.querySelectorAll('.seg-btn').forEach(btn => {
+    btn.onclick = () => {
+      const m = btn.dataset.mode;
+      const newMode = (m === '2') ? Number(m) : m;
+      onSelect(newMode);
+    };
+  });
+}
+
 
 // ==== Zvuk (Web Audio API — žádné externí soubory) ====
 let audioCtx = null;
@@ -195,13 +255,15 @@ function playSwoosh() {
   thump.stop(ctx.currentTime + duration);
 }
 
+// Klik má lehce proměnlivou výšku tónu (±5 %), ať nezní pokaždé identicky.
 function playClick() {
   if (!soundEnabled) return;
   const ctx = ensureAudioCtx();
+  const pitchMul = 0.95 + Math.random() * 0.1;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.type = 'square';
-  osc.frequency.value = 700;
+  osc.frequency.value = 700 * pitchMul;
   gain.gain.setValueAtTime(0.06, ctx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.035);
   osc.connect(gain).connect(ctx.destination);
@@ -216,42 +278,54 @@ function toggleSound() {
   if (btn) btn.textContent = soundEnabled ? '♪' : '×';
 }
 
-// ==== Texty pravidel ====
+// ==== Texty pravidel (normální psaní, ne jen tiskací — viz CSS override) ====
 const HOW_IT_WORKS_HTML = `
-  Zadej přezdívku, vyber režim a klikni na „Najít soupeře" — spáruje tě to s
-  někým dalším online, nebo si s kamarádem založ soukromou hru přes kód.
-  Na začátku dostanete zadání — jedno nebo dvě písmena, na která (nebo se
-  kterými kdekoliv uvnitř) musí slovo sedět. Střídáte se v psaní platných
-  slov, dokud jednomu z vás nedojde čas.
+  Zadej přezdívku, vyber herní režim a klikni na „Najít soupeře" – systém tě
+  spáruje s někým dalším online. Pokud chceš hrát s kamarádem, můžeš si
+  založit soukromou hru a pozvat ho pomocí kódu. Na začátku dostanete
+  zadání, kterému musí každé napsané slovo odpovídat. Poté se střídáte
+  v psaní platných slov, dokud jednomu z vás nevyprší čas.
 `;
 
 const RULES_HTML = `
-  <b>Režimy:</b>
-  <ul style="margin:6px 0; padding-left:18px">
-    <li><b>1 písmeno</b> — jen 1 písmeno na začátku. Kromě 60 s hlavního času
-      má každý hráč na <b>každý jednotlivý tah jen 10 sekund</b> — nestihneš-li
-      odpovědět včas, prohráváš okamžitě, i kdyby ti ještě zbýval hlavní čas.</li>
-    <li><b>2 písmena</b> — slovo musí <b>začínat</b> danou dvojicí (90 s na hráče).</li>
-    <li><b>3 písmena</b> — slovo musí <b>začínat</b> danou trojicí (90 s na hráče).</li>
+  <ol style="margin:6px 0; padding-left:20px">
+    <li><b>1 písmeno</b> — jen 1 písmeno na začátku — kromě 60 s hlavního
+      času má každý hráč na každý jednotlivý tah jen 10 sekund — nestihneš-li
+      odpovědět včas, prohráváš okamžitě, i kdyby ti ještě zbýval hlavní
+      čas.</li>
+    <li><b>2 písmena</b> — slovo musí začínat danou dvojicí (90 s na
+      hráče).</li>
+    <li><b>Slovní fotbal</b> — jeden hráč napíše slovo a druhý musí navázat
+      slovem, které začíná posledním písmenem předchozího slova (pouze
+      podstatná jména) — hráči se střídají, dokud jednomu z nich nevyprší
+      čas — na začátku máš na každý tah 30 sekund — za každé další slovo se
+      časový limit tahu zkrátí o 1 sekundu.</li>
     <li><b>Uprostřed</b> — daná dvojice písmen se ve slově může nacházet
-      <b>kdekoliv</b> — na začátku, uprostřed i na konci (90 s na hráče).</li>
+      kdekoliv — na začátku, uprostřed i na konci (90 s na hráče).</li>
+  </ol>
+
+  <p>Každý režim má vlastní, oddělený žebříček ELO.</p>
+
+  <p><b>Čas:</b> hlavní čas ubíhá jako u šachových hodin — jen tomu, kdo je
+  na tahu. Dojde-li hráči čas, prohrává.</p>
+
+  <p><b>Bonus:</b> za každé správně odeslané slovo se ti k hlavnímu času
+  přidá +3 s (v režimu 1 písmeno jen +1 s) — nejde ale přesáhnout startovní
+  hodnotu.</p>
+
+  <p><b>Tresty:</b></p>
+  <ul style="margin:6px 0; padding-left:20px">
+    <li>Slovo, které není ve slovníku → −1 s</li>
+    <li>Slovo, které už bylo v tomto kole použito → −3 s</li>
+    <li>V režimu Uprostřed: slovo, které neobsahuje dané dvojpísmí → −3 s</li>
   </ul>
-  Každý režim má <b>vlastní, oddělený žebříček ELO</b>.<br><br>
-  <b>Čas:</b> hlavní čas ubíhá jako u šachových hodin — jen tomu, kdo je na
-  tahu. Dojde-li hráči čas, prohrává.<br><br>
-  <b>Bonus:</b> za každé správně odeslané slovo se ti k hlavnímu času přidá
-  <b>+3 s</b> (v režimu <b>1 písmeno</b> jen <b>+1 s</b>) — nejde ale přesáhnout
-  startovní hodnotu.<br><br>
-  <b>Tresty:</b>
-  <ul style="margin:6px 0; padding-left:18px">
-    <li>Slovo, které <b>není ve slovníku</b> → −1 s</li>
-    <li>Slovo, které <b>už bylo v tomto kole použito</b> → −3 s</li>
-    <li>V režimu <b>Uprostřed</b>: slovo, které <b>neobsahuje dané dvojpísmí</b> → −3 s</li>
-  </ul>
-  Trest se odečítá z hlavního času hráče na tahu, tah zůstává na něm dál.<br><br>
-  <b>Vzdání kola:</b> hráč na tahu může kolo kdykoliv vzdát.<br><br>
-  <b>ELO:</b> po kole se hodnocení obou hráčů přepočítá standardním ELO
-  vzorcem (K=32). Bez účtů — ELO se páruje jen s přezdívkou v tomto prohlížeči.
+  <p>Trest se odečítá z hlavního času hráče na tahu, přičemž tah mu
+  zůstává.</p>
+
+  <p><b>Vzdání kola:</b> hráč na tahu může kolo kdykoliv vzdát.</p>
+
+  <p><b>ELO:</b> po kole se hodnocení obou hráčů přepočítá standardním ELO
+  vzorcem (K=32).</p>
 `;
 
 // ==== Stav aplikace ====
@@ -272,13 +346,10 @@ function renderMenu(notice) {
       <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
 
       <div class="mode-select">
-        ${MODE_ORDER.map(m => `
-          <button class="menu-item ${selectedMode === m ? 'active' : ''}" data-mode="${m}">
-            <span class="ic${m === 'speed' ? ' ic-lg' : ''}">${MODE_ICON[m]}</span><span>${MODE_LABEL[m]}</span>
-          </button>`).join('')}
+        ${modeSegmentedHtml(selectedMode)}
       </div>
 
-      <input id="nickname" placeholder="Tvoje přezdívka" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="20" value="${nickname.replace(/"/g, '')}" />
+      <input id="nickname" placeholder="Tvoje přezdívka" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="20" value="${nickname.replace(/"/g, '')}" style="margin-top:0" />
       <div class="error" id="err">${notice || ''}</div>
 
       <div class="menu-list">
@@ -308,8 +379,6 @@ function renderMenu(notice) {
       <div class="rules">
         <button type="button" class="rules-summary" id="leaderboardLinkBtn"><span class="ic">★</span><span>Žebříček</span><span class="chevron">›</span></button>
       </div>
-
-      <div class="footer-tag">Dopišto · v1.0</div>
     </div>
 
     <div class="social-links">
@@ -325,17 +394,12 @@ function renderMenu(notice) {
       <a href="#">Nahlásit chybu</a>
       <a href="#">Nastavení cookies</a>
     </footer>
+    <div class="version-tag">Dopišto · v1.0</div>
     </div>
   `;
 
   document.getElementById('soundBtn').onclick = toggleSound;
-  document.querySelectorAll('.mode-select button').forEach(btn => {
-    btn.onclick = () => {
-      const m = btn.dataset.mode;
-      selectedMode = (m === '2' || m === '3') ? Number(m) : m;
-      renderMenu();
-    };
-  });
+  bindModeSegmented((newMode) => { selectedMode = newMode; renderMenu(); });
 
   document.querySelectorAll('.rules-summary').forEach(btn => {
     btn.onclick = () => {
@@ -399,10 +463,7 @@ function renderLeaderboard(mode) {
       <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
 
       <div class="mode-select">
-        ${MODE_ORDER.map(m => `
-          <button class="menu-item ${mode === m ? 'active' : ''}" data-mode="${m}">
-            <span class="ic${m === 'speed' ? ' ic-lg' : ''}">${MODE_ICON[m]}</span><span>${MODE_LABEL[m]}</span>
-          </button>`).join('')}
+        ${modeSegmentedHtml(mode)}
       </div>
 
       <div id="leaderboardBody" style="min-height:60px">Načítám…</div>
@@ -413,14 +474,7 @@ function renderLeaderboard(mode) {
     </div>
   `;
 
-  document.querySelectorAll('.mode-select button').forEach(btn => {
-    btn.onclick = () => {
-      const m = btn.dataset.mode;
-      const newMode = (m === '2' || m === '3') ? Number(m) : m;
-      selectedMode = newMode;
-      renderLeaderboard(newMode);
-    };
-  });
+  bindModeSegmented((newMode) => { selectedMode = newMode; renderLeaderboard(newMode); });
   document.getElementById('backToMenuBtn').onclick = () => renderMenu();
 
   socket.emit('get_leaderboard', { mode }, (list) => {
@@ -432,7 +486,7 @@ function renderLeaderboard(mode) {
         <tbody>
           ${list.map((p, i) => `<tr><td>${i + 1}</td><td>${p.name}</td><td>${p.elo}</td><td>${p.wins}/${p.losses}</td></tr>`).join('')}
         </tbody>
-      </table>` : '<div style="color:var(--muted); text-align:center; padding:20px 0">Zatím nikdo v tomto režimu nehrál.</div>';
+      </table>` : '<div style="color:var(--muted); text-align:center; padding:20px 0">Zatím nikdo v tomto režimu nehrál (max. 100 nejlepších).</div>';
   });
 }
 
@@ -506,12 +560,16 @@ function renderRevealCountdown(data) {
     finished: false,
     turn: data.turn,
     timeLeft: data.timeLeft.slice(),
-    turnTimer: data.mode === 'speed' ? 10000 : null,
+    turnTimer: data.turnTimer,
+    turnTimeCap: data.turnTimer, // pro procentuální výpočet lišty (Blitz/Fotbal)
+    requiredLetter: data.requiredLetter || null,
     usedWordsCount: 0,
     lastWholeSecond: [999, 999],
     lastHalfStep: [999, 999],
     lastHalfStepTurn: 999,
   };
+
+  const startingName = data.turn === data.youAre ? game.myName : game.opponentName;
 
   app.innerHTML = `
     <div class="card">
@@ -526,8 +584,9 @@ function renderRevealCountdown(data) {
           <div class="vs-elo">${data.opponentElo} ELO</div>
         </div>
       </div>
+      <div class="turn-preview">Začíná: <span>${startingName}</span></div>
       <div class="countdown-label">Zadání kola</div>
-      ${patternTilesHtml(data.pattern, 'reveal')}
+      ${patternDisplayBlock(data.pattern, 'reveal')}
       <div class="countdown-num" id="countNum">3</div>
     </div>
   `;
@@ -559,16 +618,33 @@ function renderRevealCountdown(data) {
 }
 
 // ==== Herní obrazovka ====
+// Hráč vždy vidí sebe vlevo a soupeře vpravo — bez ohledu na to, jaký index
+// (0/1) mu přidělil server. clockMe/clockOpp jsou proto pevné pozice a
+// server-idx se na ně mapuje přes slotFor().
 const REACTIONS = ['👍', '😂', '🔥', '🤔', '💀', '⏳'];
 let lastReactionSentAt = 0;
 
-function renderGame() {
-  const names = [null, null];
-  names[game.youAre] = game.myName;
-  names[1 - game.youAre] = game.opponentName;
-  game.names = names;
+function slotFor(playerIdx) {
+  return playerIdx === game.youAre ? 'Me' : 'Opp';
+}
 
-  const turnTimerHtml = game.mode === 'speed' ? `
+function renderGame() {
+  const hasBank = game.mode !== 'football';
+  const hasTurnTimer = game.mode === 'speed' || game.mode === 'football';
+
+  const clocksHtml = hasBank ? `
+    <div class="clocks">
+      <div class="clock" id="clockMe"><div class="name">${game.myName}</div><div class="time">${fmtTime(game.timeLeft[game.youAre])}</div></div>
+      <div class="clock" id="clockOpp"><div class="name">${game.opponentName}</div><div class="time">${fmtTime(game.timeLeft[1 - game.youAre])}</div></div>
+    </div>
+  ` : `
+    <div class="clocks">
+      <div class="clock" id="clockMe"><div class="name">${game.myName}</div></div>
+      <div class="clock" id="clockOpp"><div class="name">${game.opponentName}</div></div>
+    </div>
+  `;
+
+  const turnTimerHtml = hasTurnTimer ? `
     <div class="turn-timer-wrap">
       <div class="turn-timer-label"><span>Čas na tah</span><span id="turnTimerNum">${(game.turnTimer / 1000).toFixed(1)} s</span></div>
       <div class="turn-timer-bar-bg"><div class="turn-timer-bar" id="turnBar" style="width:100%"></div></div>
@@ -578,18 +654,15 @@ function renderGame() {
   app.innerHTML = `
     <div class="card">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundEnabled ? '♪' : '×'}</button>
-      ${patternTilesHtml(game.pattern)}
-      <div class="used-count" id="usedCount">${patternInstruction(game.pattern)} · Použitá slova: 0</div>
-      <div class="clocks">
-        <div class="clock" id="clock0"><div class="name">${names[0]}</div><div class="time">${fmtTime(game.timeLeft[0])}</div></div>
-        <div class="clock" id="clock1"><div class="name">${names[1]}</div><div class="time">${fmtTime(game.timeLeft[1])}</div></div>
-      </div>
+      ${patternDisplayBlock(game.pattern)}
+      <div class="used-count" id="usedCount">${currentInstructionText()} · Slov: 0</div>
+      ${clocksHtml}
       <div class="error" id="gameErr"></div>
       ${turnTimerHtml}
-      <div class="turn-banner">Na tahu: <span id="turnName">${names[game.turn]}</span></div>
+      <div class="turn-banner">Na tahu: <span id="turnName">${game.turn === game.youAre ? game.myName : game.opponentName}</span></div>
       <div class="last-word" id="lastWordBanner"></div>
       <div class="word-input">
-        <input id="wordInput" placeholder="${patternInputPlaceholder(game.pattern)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" />
+        <input id="wordInput" placeholder="${currentPlaceholder()}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" />
         <button id="sendBtn">Odeslat</button>
       </div>
       <div class="reaction-bar" id="reactionBar">
@@ -644,18 +717,34 @@ function renderGame() {
 
 function updateClocksUI() {
   if (!game) return;
-  for (let i = 0; i < 2; i++) {
-    const el = document.getElementById(`clock${i}`);
-    if (!el) continue;
-    el.classList.toggle('active', game.turn === i);
-    el.classList.toggle('low', game.timeLeft[i] < 15000);
-    el.querySelector('.time').textContent = fmtTime(game.timeLeft[i]);
+  const hasBank = game.mode !== 'football';
+  const hasTurnTimer = game.mode === 'speed' || game.mode === 'football';
+
+  const meEl = document.getElementById('clockMe');
+  const oppEl = document.getElementById('clockOpp');
+  if (meEl) {
+    meEl.classList.toggle('active', game.turn === game.youAre);
+    if (hasBank) {
+      meEl.classList.toggle('low', game.timeLeft[game.youAre] < 15000);
+      const t = meEl.querySelector('.time');
+      if (t) t.textContent = fmtTime(game.timeLeft[game.youAre]);
+    }
   }
-  if (game.mode === 'speed') {
+  if (oppEl) {
+    oppEl.classList.toggle('active', game.turn !== game.youAre);
+    if (hasBank) {
+      oppEl.classList.toggle('low', game.timeLeft[1 - game.youAre] < 15000);
+      const t = oppEl.querySelector('.time');
+      if (t) t.textContent = fmtTime(game.timeLeft[1 - game.youAre]);
+    }
+  }
+
+  if (hasTurnTimer) {
     const bar = document.getElementById('turnBar');
     const label = document.getElementById('turnTimerNum');
+    const cap = game.turnTimeCap || 10000;
     if (bar) {
-      const pct = Math.max(0, Math.min(100, (game.turnTimer / 10000) * 100));
+      const pct = Math.max(0, Math.min(100, (game.turnTimer / cap) * 100));
       bar.style.width = pct + '%';
       bar.classList.toggle('urgent', game.turnTimer < 5000);
     }
@@ -664,7 +753,7 @@ function updateClocksUI() {
 }
 
 function flashPenalty(playerIdx) {
-  const clockEl = document.getElementById(`clock${playerIdx}`);
+  const clockEl = document.getElementById(`clock${slotFor(playerIdx)}`);
   const cardEl = document.querySelector('.card');
   if (clockEl) {
     clockEl.classList.remove('penalty');
@@ -679,7 +768,7 @@ function flashPenalty(playerIdx) {
 }
 
 function showReactionBubble(playerIdx, emoji) {
-  const clockEl = document.getElementById(`clock${playerIdx}`);
+  const clockEl = document.getElementById(`clock${slotFor(playerIdx)}`);
   if (!clockEl) return;
   const bubble = document.createElement('div');
   bubble.className = 'reaction-bubble';
@@ -689,7 +778,7 @@ function showReactionBubble(playerIdx, emoji) {
 }
 
 function showBonusPopup(playerIdx, ms) {
-  const clockEl = document.getElementById(`clock${playerIdx}`);
+  const clockEl = document.getElementById(`clock${slotFor(playerIdx)}`);
   if (!clockEl) return;
   const el = document.createElement('div');
   el.className = 'bonus-popup';
@@ -707,21 +796,23 @@ function renderResult(data) {
   playDefeat();
   setTimeout(playVictory, 650);
 
+  const timeoutLabel = game.mode === 'football' || game.mode === 'speed'
+    ? 'nestihl(a) odpovědět včas.'
+    : 'došel hlavní čas.';
+
   let reasonText;
   if (iWon) {
-    if (data.reason === 'timeout') reasonText = `${opp.name} došel hlavní čas.`;
-    else if (data.reason === 'turn_timeout') reasonText = `${opp.name} nestihl(a) odpovědět do 10 s.`;
+    if (data.reason === 'timeout' || data.reason === 'turn_timeout') reasonText = `${opp.name} ${timeoutLabel}`;
     else if (data.reason === 'opponent_left') reasonText = `${opp.name} odešel(la) ze hry.`;
     else reasonText = `${opp.name} se vzdal(a).`;
   } else {
-    if (data.reason === 'timeout') reasonText = 'Došel ti hlavní čas.';
-    else if (data.reason === 'turn_timeout') reasonText = 'Nestihl(a) jsi odpovědět do 10 s.';
+    if (data.reason === 'timeout' || data.reason === 'turn_timeout') reasonText = 'Nestihl(a) jsi odpovědět včas.';
     else reasonText = 'Vzdal(a) jsi kolo.';
   }
 
   const history = data.history || [];
   const historyHtml = history.length ? history.map(h => {
-    const name = game.names[h.playerIdx];
+    const name = h.playerIdx === game.youAre ? game.myName : game.opponentName;
     return `<div class="p${h.playerIdx}">${name}: ${h.word}</div>`;
   }).join('') : '<div style="color:var(--muted)">V tomto kole nepadlo žádné slovo.</div>';
 
@@ -800,16 +891,25 @@ socket.on('match_found', (data) => {
 });
 
 socket.on('state_update', (data) => {
-  if (!game || data.roomId && data.roomId !== game.roomId) { /* ignorováno mimo hru */ }
   if (!game) return;
 
   game.turn = data.turn;
   game.timeLeft = data.timeLeft;
   game.turnTimer = data.turnTimer;
   game.usedWordsCount = data.usedWordsCount;
+  if (game.mode === 'football' && data.requiredLetter !== undefined) {
+    game.requiredLetter = data.requiredLetter;
+  }
+
+  // Když se tah právě přehodil (nové slovo), aktuální turnTimer je zároveň
+  // nový "strop" pro procentuální výpočet lišty (u Fotbalu se strop zmenšuje).
+  const turnJustChanged = !!data.lastWord;
+  if (turnJustChanged && (game.mode === 'speed' || game.mode === 'football') && data.turnTimer != null) {
+    game.turnTimeCap = data.turnTimer;
+  }
 
   const active = data.turn;
-  if (game.mode === 'speed' && data.turnTimer != null) {
+  if ((game.mode === 'speed' || game.mode === 'football') && data.turnTimer != null) {
     const halfStep = Math.floor(data.turnTimer / 500);
     if (halfStep !== game.lastHalfStepTurn) {
       game.lastHalfStepTurn = halfStep;
@@ -835,21 +935,27 @@ socket.on('state_update', (data) => {
   const feed = document.getElementById('feed');
   const gameErr = document.getElementById('gameErr');
   if (data.lastWord && feed) {
+    const wordOwnerName = data.lastPlayerIdx === game.youAre ? game.myName : game.opponentName;
     const div = document.createElement('div');
     div.className = 'p' + data.lastPlayerIdx;
-    div.textContent = `${game.names[data.lastPlayerIdx]}: ${data.lastWord}`;
+    div.textContent = `${wordOwnerName}: ${data.lastWord}`;
     feed.prepend(div);
     playSwoosh();
     if (gameErr) gameErr.textContent = '';
+
     const usedCount = document.getElementById('usedCount');
-    if (usedCount) usedCount.textContent = `${patternInstruction(game.pattern)} · Použitá slova: ${data.usedWordsCount}`;
+    if (usedCount) usedCount.textContent = `${currentInstructionText()} · Slov: ${data.usedWordsCount}`;
+
+    const wordInputEl = document.getElementById('wordInput');
+    if (wordInputEl && game.mode === 'football') wordInputEl.placeholder = currentPlaceholder();
+
     const turnName = document.getElementById('turnName');
-    if (turnName) turnName.textContent = game.names[game.turn];
+    if (turnName) turnName.textContent = game.turn === game.youAre ? game.myName : game.opponentName;
 
     const lastWordBanner = document.getElementById('lastWordBanner');
     if (lastWordBanner) {
       lastWordBanner.className = 'last-word p' + data.lastPlayerIdx;
-      lastWordBanner.textContent = `${game.names[data.lastPlayerIdx]}: ${data.lastWord}`;
+      lastWordBanner.textContent = `${wordOwnerName}: ${data.lastWord}`;
       lastWordBanner.classList.remove('pop');
       void lastWordBanner.offsetWidth;
       lastWordBanner.classList.add('pop');
@@ -908,7 +1014,9 @@ socket.on('rejoin_success', (data) => {
   game.turn = data.turn;
   game.timeLeft = data.timeLeft;
   game.turnTimer = data.turnTimer;
+  game.turnTimeCap = data.turnTimer;
   game.usedWordsCount = data.usedWordsCount;
+  game.requiredLetter = data.requiredLetter || null;
   game.lastWholeSecond = [999, 999];
   game.lastHalfStep = [999, 999];
   game.lastHalfStepTurn = 999;
@@ -972,3 +1080,5 @@ renderMenu();
 document.addEventListener('click', (e) => {
   if (e.target.closest('button, summary')) playClick();
 }, true);
+
+

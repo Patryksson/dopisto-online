@@ -104,7 +104,7 @@
     display: flex; align-items: center; justify-content: center; font-size: 15px;
     background: transparent; border: 1px solid var(--line); color: var(--ink-soft);
   }
-  .sound-toggle { position: absolute; top: 16px; right: 16px; margin: 0; width: 40px; }
+  .sound-toggle { position: absolute; top: 12px; right: 12px; margin: 0; width: 36px; height: 36px; z-index: 2; }
 
   .menu-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
 
@@ -144,6 +144,12 @@
   .vs-name { font-size: 13px; color: var(--ink-soft); letter-spacing: 1px; }
   .vs-elo { font-size: 16px; color: var(--accent); font-weight: 700; margin-top: 2px; }
   .vs-sep { color: var(--muted); font-size: 11px; letter-spacing: 2px; }
+
+  .turn-preview {
+    text-align: center; font-size: 12px; letter-spacing: .5px; color: var(--muted);
+    margin: -6px 0 14px;
+  }
+  .turn-preview span { color: var(--accent); font-weight: 700; }
 
   .draw-pop { display: inline-block; animation: drawPop .5s cubic-bezier(.34,1.56,.64,1); }
   @keyframes drawPop {
@@ -204,12 +210,37 @@
   .paused-overlay { text-align: center; padding: 6px 0 18px; }
   .paused-overlay p { font-size: 13px; }
 
-  .mode-select { display: flex; flex-direction: column; gap: 2px; margin-bottom: 18px; }
-  .mode-select button { gap: 30px; transition: background .15s, color .15s, transform .15s; }
-  .mode-select button.active { background: var(--paper-3); color: var(--ink); animation: modePop .22s ease; }
+  .mode-preview-row {
+    display: flex; gap: 2px; margin-bottom: 6px;
+  }
+  .mode-preview-row span {
+    flex: 1; text-align: center; font-size: 10px; letter-spacing: .5px;
+    color: var(--muted);
+  }
+  .mode-preview-row span.active { color: var(--accent); font-weight: 700; }
+
+  .mode-segmented {
+    display: flex; align-items: stretch; gap: 2px;
+    background: var(--paper-2); border: 1px solid var(--line);
+    border-radius: 999px; padding: 4px; margin-bottom: 10px;
+  }
+  .seg-btn {
+    flex: 1; padding: 9px 3px; border-radius: 999px; border: none;
+    background: transparent; color: var(--muted);
+    font-family: inherit; font-size: 9.5px; letter-spacing: .6px; line-height: 1.2;
+    cursor: pointer; white-space: normal; text-align: center;
+    transition: background .15s, color .15s, transform .1s;
+    touch-action: manipulation;
+  }
+  .seg-btn.active {
+    background: linear-gradient(180deg, var(--accent), #d92e24); color: #fff; font-weight: 700;
+    box-shadow: 0 4px 12px rgba(255,59,48,.35);
+    animation: modePop .22s ease;
+  }
+  .seg-btn:active { transform: scale(.96); }
   @keyframes modePop {
-    0%   { transform: scale(.97); }
-    60%  { transform: scale(1.01); }
+    0%   { transform: scale(.94); }
+    60%  { transform: scale(1.02); }
     100% { transform: scale(1); }
   }
   .ic-lg { font-size: 22px; }
@@ -227,7 +258,15 @@
   .rules-summary .chevron { margin-left: auto; transition: transform .25s ease; color: var(--muted); }
   .rules-summary.open .chevron { transform: rotate(90deg); color: var(--accent); }
   .rules-panel { max-height: 0; overflow: hidden; transition: max-height .32s cubic-bezier(.4,0,.2,1); }
-  .rules-body { font-family: 'Space Grotesk', -apple-system, sans-serif; font-size: 12.5px; letter-spacing: .3px; color: var(--ink-soft); line-height: 1.7; margin: 8px 4px 4px; }
+  .rules-body {
+    font-family: 'Space Grotesk', -apple-system, sans-serif; font-size: 12.5px; letter-spacing: .2px;
+    color: var(--ink-soft); line-height: 1.7; margin: 8px 4px 4px;
+    text-transform: none;
+  }
+  .rules-body p { margin: 0 0 10px; }
+  .rules-body p:last-child { margin-bottom: 0; }
+  .rules-body ol, .rules-body ul { margin: 6px 0; }
+  .rules-body li { margin-bottom: 6px; }
   .rules-body b { color: var(--ink); }
 
   .turn-timer-wrap { margin: 0 0 16px; }
@@ -254,7 +293,7 @@
 
   .penalty-note { color: var(--accent); font-weight: 700; }
 
-  .footer-tag { position: absolute; bottom: 14px; left: 20px; font-size: 10px; letter-spacing: 1.5px; color: var(--muted); }
+  .version-tag { text-align: center; font-size: 10px; letter-spacing: 1.5px; color: var(--muted); padding-bottom: 4px; }
 
   .page { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 460px; gap: 22px; }
 
