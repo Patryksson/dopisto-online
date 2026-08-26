@@ -30,13 +30,27 @@ function patternInputPlaceholder(pattern) {
   return `Napiš slovo na '${pattern.value}'…`;
 }
 
+// Slovní fotbal: dlouhá a krátká varianta samohlásky se počítají jako
+// stejné písmeno — jen pro zobrazení (validace je na serveru).
+const VOWEL_EQUIV = {
+  a: ['á'], á: ['a'],
+  e: ['é'], é: ['e'],
+  i: ['í'], í: ['i'],
+  o: ['ó'], ó: ['o'],
+  u: ['ú', 'ů'], ú: ['u'], ů: ['u'],
+  y: ['ý'], ý: ['y'],
+};
+function footballAcceptableLetters(letter) {
+  return [letter, ...(VOWEL_EQUIV[letter] || [])];
+}
+
 // Dynamické zadání pro Slovní fotbal — mění se každý tah podle posledního
 // odehraného slova.
 function currentInstructionText() {
   if (game.mode === 'football') {
-    return game.requiredLetter
-      ? `Slovo musí začínat na "${game.requiredLetter}".`
-      : 'První slovo může být jakékoliv (jen podstatné jméno).';
+    if (!game.requiredLetter) return 'První slovo může být jakékoliv (jen podstatné jméno).';
+    const options = footballAcceptableLetters(game.requiredLetter).map(l => `"${l}"`).join(' nebo ');
+    return `Slovo musí začínat na ${options}.`;
   }
   return patternInstruction(game.pattern);
 }
@@ -299,7 +313,9 @@ const RULES_HTML = `
       slovem, které začíná posledním písmenem předchozího slova (pouze
       podstatná jména) — hráči se střídají, dokud jednomu z nich nevyprší
       čas — na začátku máš na každý tah 30 sekund — za každé další slovo se
-      časový limit tahu zkrátí o 1 sekundu.</li>
+      časový limit tahu zkrátí o 1 sekundu. Dlouhá a krátká varianta
+      samohlásky se počítají jako stejné písmeno (slovo končící na „á" lze
+      navázat i slovem začínajícím na „a", a naopak).</li>
     <li><b>Uprostřed</b> — daná dvojice písmen se ve slově může nacházet
       kdekoliv — na začátku, uprostřed i na konci (90 s na hráče).</li>
   </ol>
@@ -352,6 +368,8 @@ function renderMenu(notice) {
       <input id="nickname" placeholder="Tvoje přezdívka" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="20" value="${nickname.replace(/"/g, '')}" style="margin-top:0" />
       <div class="error" id="err">${notice || ''}</div>
 
+      <div class="or-sep"><span class="line"></span><span>hrát proti náhodnému hráči</span><span class="line"></span></div>
+
       <div class="menu-list">
         <button class="menu-item" id="findBtn"><span class="ic">🔎</span><span>Najít soupeře</span></button>
       </div>
@@ -362,7 +380,9 @@ function renderMenu(notice) {
         <button class="menu-item" id="createLobbyBtn"><span class="ic">＋</span><span>Vytvořit lobby</span></button>
       </div>
       <div class="lobby-row">
-        <input id="joinCode" placeholder="KÓD" maxlength="5" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" />
+        <div class="code-boxes" id="joinCodeBoxes">
+          ${[0, 1, 2, 3, 4].map(i => `<input class="code-box" data-idx="${i}" maxlength="1" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" inputmode="text" />`).join('')}
+        </div>
         <button id="joinLobbyBtn">Připojit</button>
       </div>
 
@@ -442,17 +462,50 @@ function renderMenu(notice) {
 
   document.getElementById('joinLobbyBtn').onclick = () => {
     const n = getNickname();
-    const code = document.getElementById('joinCode').value.trim();
+    const code = getJoinCode();
     const err = document.getElementById('err');
     if (!n) { err.textContent = 'Zadej přezdívku.'; return; }
-    if (!code) { err.textContent = 'Zadej kód lobby.'; return; }
+    if (code.length < 5) { err.textContent = 'Zadej celý kód lobby.'; return; }
     saveNickname(n);
     ensureAudioCtx();
     socket.emit('join_lobby', { nickname: n, code });
     renderJoining();
   };
 
+  setupCodeBoxes();
+
   document.getElementById('leaderboardLinkBtn').onclick = () => renderLeaderboard(selectedMode);
+}
+
+// Pět samostatných políček pro kód lobby — auto-přeskakování na další/
+// předchozí políčko při psaní/mazání, vkládání (paste) rozdělí celý kód.
+function getJoinCode() {
+  return Array.from(document.querySelectorAll('.code-box')).map(b => b.value.trim()).join('');
+}
+
+function setupCodeBoxes() {
+  const boxes = Array.from(document.querySelectorAll('.code-box'));
+  boxes.forEach((box, i) => {
+    box.addEventListener('input', () => {
+      box.value = box.value.toUpperCase().slice(-1);
+      if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
+    });
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !box.value && i > 0) {
+        boxes[i - 1].focus();
+      }
+      if (e.key === 'Enter') {
+        document.getElementById('joinLobbyBtn').click();
+      }
+    });
+    box.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text').trim().toUpperCase();
+      for (let j = 0; j < boxes.length; j++) boxes[j].value = text[j] || '';
+      const last = boxes[Math.min(text.length, boxes.length) - 1];
+      if (last) last.focus();
+    });
+  });
 }
 
 // ==== Žebříček — samostatná stránka ====

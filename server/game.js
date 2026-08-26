@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { isValidWord, generatePattern, matchesPattern, patternInstruction } = require('./dictionary');
+const { isValidWord, generatePattern, matchesPattern, patternInstruction, acceptableStartLetters, matchesRequiredLetter } = require('./dictionary');
 const store = require('./store');
 
 const MODES = [2, 'football', 'middle', 'speed'];
@@ -301,8 +301,9 @@ function submitFootballWord(io, room, idx, clean) {
   const socket = room.players[idx].socket;
   const requiredLetter = currentRequiredLetter(room);
 
-  if (requiredLetter && !clean.startsWith(requiredLetter)) {
-    socket.emit('word_rejected', { reason: `Slovo musí začínat na "${requiredLetter}".` });
+  if (requiredLetter && !matchesRequiredLetter(clean, requiredLetter)) {
+    const options = acceptableStartLetters(requiredLetter).map(l => `"${l}"`).join(' nebo ');
+    socket.emit('word_rejected', { reason: `Slovo musí začínat na ${options}.` });
     return;
   }
   if (room.usedWords.has(clean)) {

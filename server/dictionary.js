@@ -42,4 +42,26 @@ function patternInstruction(pattern) {
   return `Slovo musí začínat na "${pattern.value}".`;
 }
 
-module.exports = { isValidWord, generatePattern, matchesPattern, patternInstruction };
+// Slovní fotbal: dlouhá a krátká varianta samohlásky se počítají jako
+// stejné písmeno (slovo končící na "á" lze navázat i slovem na "a", a naopak).
+const VOWEL_EQUIV = {
+  a: ['á'], á: ['a'],
+  e: ['é'], é: ['e'],
+  i: ['í'], í: ['i'],
+  o: ['ó'], ó: ['o'],
+  u: ['ú', 'ů'], ú: ['u'], ů: ['u'],
+  y: ['ý'], ý: ['y'],
+};
+
+function acceptableStartLetters(letter) {
+  return [letter, ...(VOWEL_EQUIV[letter] || [])];
+}
+
+function matchesRequiredLetter(word, requiredLetter) {
+  return acceptableStartLetters(requiredLetter).some(l => word.startsWith(l));
+}
+
+module.exports = {
+  isValidWord, generatePattern, matchesPattern, patternInstruction,
+  acceptableStartLetters, matchesRequiredLetter,
+};
