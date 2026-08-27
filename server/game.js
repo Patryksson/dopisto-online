@@ -3,23 +3,17 @@ const { isValidWord, generatePattern, matchesPattern, patternInstruction, accept
 const store = require('./store');
 
 const MODES = [2, 'football', 'middle', 'speed'];
-const BANK_TIME_BY_MODE = { 2: 90000, middle: 90000, speed: 60000 };
-const TURN_TIME_MS = 10000; // "speed" (1 písmeno) — čas na jeden tah
+// Slovní fotbal má teď stejnou časomíru jako "1 písmeno" (speed) — 60 s
+// hlavního času (banka) + 10 s na každý jednotlivý tah.
+const BANK_TIME_BY_MODE = { 2: 90000, middle: 90000, speed: 60000, football: 60000 };
+const TURN_TIME_MS = 10000; // čas na jeden tah — "speed" i "football"
 const PENALTY_NOT_IN_DICT_MS = 1000;
 const PENALTY_ALREADY_USED_MS = 3000;
 const PENALTY_WRONG_PATTERN_MS = 3000;
-// Bonus k hlavnímu času za každé správně odeslané slovo (režimy s "bankou"
-// času — Slovní fotbal bonus nemá, tam je jen zkracující se čas na tah).
-const BONUS_MS_BY_MODE = { 2: 3000, middle: 3000, speed: 1000 };
+// Bonus k hlavnímu času za každé správně odeslané slovo.
+const BONUS_MS_BY_MODE = { 2: 3000, middle: 3000, speed: 1000, football: 1000 };
 // Musí přibližně odpovídat délce odhalovací/odpočtové animace na klientu.
 const REVEAL_COUNTDOWN_MS = 3500;
-
-// Slovní fotbal — jen čas na tah, žádná banka.
-const FOOTBALL_START_TURN_MS = 30000;
-const FOOTBALL_DECREMENT_MS = 1000;
-// Vlastní bezpečnostní minimum, ať se čas na tah nedostane na 0/záporné
-// hodnoty při hodně dlouhém kole (v zadání není explicitně řešeno).
-const FOOTBALL_MIN_TURN_MS = 3000;
 
 // Kolik času má hráč na znovupřipojení, než automaticky prohrává.
 const RECONNECT_GRACE_MS = 15000;
@@ -161,11 +155,13 @@ function setupGame(io, socket) {
     if (!clean) return;
 
     if (room.mode === 'football') {
-      submitFootballWord(io, room, idx, clean);
-      return;
-    }
-
-    if (!matchesPattern(clean, room.pattern)) {
+      const requiredLetter = currentRequiredLetter(room);
+      if (requiredLetter && !matchesRequiredLetter(clean, requiredLetter)) {
+        const options = acceptableStartLetters(requiredLetter).map(l => `"${l}"`).join(' nebo ');
+        socket.emit('word_rejected', { reason: `Slovo musí začínat na ${options}.` });
+        return;
+      }
+    } else if (!matchesPattern(clean, room.pattern)) {
       if (room.pattern.type === 'infix2') {
         applyPenalty(io, room, idx, PENALTY_WRONG_PATTERN_MS, 'Slovo neobsahuje daná písmena!');
       } else {
@@ -173,6 +169,7 @@ function setupGame(io, socket) {
       }
       return;
     }
+
     if (room.usedWords.has(clean)) {
       applyPenalty(io, room, idx, PENALTY_ALREADY_USED_MS, 'Slovo už bylo použito!');
       return;
@@ -185,14 +182,19 @@ function setupGame(io, socket) {
     room.usedWords.add(clean);
     room.history.push({ word: clean, playerIdx: idx });
 
+    // Bonus k hlavnímu času za správně odeslané slovo — nesmí přesáhnout
+    // startovní hodnotu banky daného režimu.
     const bank = BANK_TIME_BY_MODE[room.mode];
     const before = room.timeLeft[idx];
     room.timeLeft[idx] = Math.min(bank, before + BONUS_MS_BY_MODE[room.mode]);
     const bonusMs = room.timeLeft[idx] - before;
 
     room.turn = 1 - idx;
-    if (room.mode === 'speed') room.turnTimer = TURN_TIME_MS;
-    broadcastState(io, room, { lastWord: clean, lastPlayerIdx: idx, bonusMs, bonusPlayerIdx: idx });
+    if (room.mode === 'speed' || room.mode === 'football') room.turnTimer = TURN_TIME_MS;
+
+    const extra = { lastWord: clean, lastPlayerIdx: idx, bonusMs, bonusPlayerIdx: idx };
+    if (room.mode === 'football') extra.requiredLetter = clean.slice(-1);
+    broadcastState(io, room, extra);
   });
 
   socket.on('give_up', ({ roomId }) => {
@@ -297,54 +299,14 @@ function currentRequiredLetter(room) {
   return room.history[room.history.length - 1].word.slice(-1);
 }
 
-function submitFootballWord(io, room, idx, clean) {
-  const socket = room.players[idx].socket;
-  const requiredLetter = currentRequiredLetter(room);
-
-  if (requiredLetter && !matchesRequiredLetter(clean, requiredLetter)) {
-    const options = acceptableStartLetters(requiredLetter).map(l => `"${l}"`).join(' nebo ');
-    socket.emit('word_rejected', { reason: `Slovo musí začínat na ${options}.` });
-    return;
-  }
-  if (room.usedWords.has(clean)) {
-    applyPenalty(io, room, idx, PENALTY_ALREADY_USED_MS, 'Slovo už bylo použito!');
-    return;
-  }
-  if (!isValidWord(clean)) {
-    applyPenalty(io, room, idx, PENALTY_NOT_IN_DICT_MS, 'Slovo není ve slovníku!');
-    return;
-  }
-
-  room.usedWords.add(clean);
-  room.history.push({ word: clean, playerIdx: idx });
-  room.turn = 1 - idx;
-  room.turnTimeMs = Math.max(FOOTBALL_MIN_TURN_MS, room.turnTimeMs - FOOTBALL_DECREMENT_MS);
-  room.turnTimer = room.turnTimeMs;
-
-  broadcastState(io, room, {
-    lastWord: clean,
-    lastPlayerIdx: idx,
-    requiredLetter: clean.slice(-1),
-  });
-}
-
 function startMatch(io, a, b, mode) {
   const roomId = 'room_' + Math.random().toString(36).slice(2, 10);
   const turnStart = Math.random() < 0.5 ? 0 : 1;
 
-  let pattern, timeLeft, turnTimer, turnTimeMs;
-  if (mode === 'football') {
-    pattern = { type: 'football' };
-    timeLeft = [0, 0];
-    turnTimeMs = FOOTBALL_START_TURN_MS;
-    turnTimer = FOOTBALL_START_TURN_MS;
-  } else {
-    pattern = generatePattern(mode);
-    const bank = BANK_TIME_BY_MODE[mode];
-    timeLeft = [bank, bank];
-    turnTimer = mode === 'speed' ? TURN_TIME_MS : null;
-    turnTimeMs = null;
-  }
+  const pattern = mode === 'football' ? { type: 'football' } : generatePattern(mode);
+  const bank = BANK_TIME_BY_MODE[mode];
+  const timeLeft = [bank, bank];
+  const turnTimer = (mode === 'speed' || mode === 'football') ? TURN_TIME_MS : null;
 
   const room = {
     id: roomId,
@@ -359,7 +321,6 @@ function startMatch(io, a, b, mode) {
     history: [],
     timeLeft,
     turnTimer,
-    turnTimeMs,
     finished: false,
     lastTick: null,
     intervalId: null,
@@ -404,22 +365,9 @@ function tickRoom(io, room) {
   room.lastTick = now;
 
   const active = room.turn;
-
-  if (room.mode === 'football') {
-    room.turnTimer -= elapsed;
-    if (room.turnTimer <= 0) {
-      room.turnTimer = 0;
-      broadcastState(io, room);
-      endRoom(io, room, 1 - active, 'turn_timeout');
-      return;
-    }
-    broadcastState(io, room);
-    return;
-  }
-
   room.timeLeft[active] -= elapsed;
 
-  if (room.mode === 'speed') {
+  if (room.mode === 'speed' || room.mode === 'football') {
     room.turnTimer -= elapsed;
     if (room.turnTimer <= 0) {
       room.turnTimer = 0;
@@ -452,14 +400,6 @@ function broadcastState(io, room, extra = {}) {
 
 function applyPenalty(io, room, idx, amountMs, label) {
   room.players[idx].socket.emit('word_rejected', { reason: label, penaltyMs: amountMs });
-
-  if (room.mode === 'football') {
-    room.turnTimer = Math.max(0, room.turnTimer - amountMs);
-    broadcastState(io, room);
-    if (room.turnTimer <= 0) endRoom(io, room, 1 - idx, 'turn_timeout');
-    return;
-  }
-
   room.timeLeft[idx] = Math.max(0, room.timeLeft[idx] - amountMs);
   broadcastState(io, room);
   if (room.timeLeft[idx] <= 0) endRoom(io, room, 1 - idx, 'timeout');

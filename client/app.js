@@ -31,14 +31,15 @@ function patternInputPlaceholder(pattern) {
 }
 
 // Slovní fotbal: dlouhá a krátká varianta samohlásky se počítají jako
-// stejné písmeno — jen pro zobrazení (validace je na serveru).
+// stejné písmeno, "y"/"i" navíc taky (znějí stejně) — jen pro zobrazení,
+// validace je na serveru.
 const VOWEL_EQUIV = {
   a: ['á'], á: ['a'],
   e: ['é'], é: ['e'],
-  i: ['í'], í: ['i'],
+  i: ['í', 'y'], í: ['i'],
   o: ['ó'], ó: ['o'],
   u: ['ú', 'ů'], ú: ['u'], ů: ['u'],
-  y: ['ý'], ý: ['y'],
+  y: ['ý', 'i'], ý: ['y'],
 };
 function footballAcceptableLetters(letter) {
   return [letter, ...(VOWEL_EQUIV[letter] || [])];
@@ -312,10 +313,11 @@ const RULES_HTML = `
     <li><b>Slovní fotbal</b> — jeden hráč napíše slovo a druhý musí navázat
       slovem, které začíná posledním písmenem předchozího slova (pouze
       podstatná jména) — hráči se střídají, dokud jednomu z nich nevyprší
-      čas — na začátku máš na každý tah 30 sekund — za každé další slovo se
-      časový limit tahu zkrátí o 1 sekundu. Dlouhá a krátká varianta
-      samohlásky se počítají jako stejné písmeno (slovo končící na „á" lze
-      navázat i slovem začínajícím na „a", a naopak).</li>
+      čas. Časomíra je stejná jako u režimu 1 písmeno: 60 s hlavního času
+      (šachové hodiny) a k tomu 10 s na každý jednotlivý tah. Dlouhá a
+      krátká varianta samohlásky se počítají jako stejné písmeno (slovo
+      končící na „á" lze navázat i slovem začínajícím na „a", a naopak) a
+      totéž platí pro „y" a „i" (znějí stejně).</li>
     <li><b>Uprostřed</b> — daná dvojice písmen se ve slově může nacházet
       kdekoliv — na začátku, uprostřed i na konci (90 s na hráče).</li>
   </ol>
@@ -358,14 +360,16 @@ function renderMenu(notice) {
     <div class="card">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundEnabled ? '♪' : '×'}</button>
       <img class="logo" src="logo.png" alt="Dopišto" />
-      <p class="tagline">Dva hráči, dvě písmena, jeden vítěz.</p>
       <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
 
       <div class="mode-select">
         ${modeSegmentedHtml(selectedMode)}
       </div>
 
-      <input id="nickname" placeholder="Tvoje přezdívka" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="20" value="${nickname.replace(/"/g, '')}" style="margin-top:0" />
+      <div class="nickname-box">
+        <svg class="nickname-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.5-7 8-7s8 3 8 7"></path></svg>
+        <input id="nickname" placeholder="Tvoje přezdívka" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="20" value="${nickname.replace(/"/g, '')}" />
+      </div>
       <div class="error" id="err">${notice || ''}</div>
 
       <div class="or-sep"><span class="line"></span><span>hrát proti náhodnému hráči</span><span class="line"></span></div>
@@ -682,18 +686,12 @@ function slotFor(playerIdx) {
 }
 
 function renderGame() {
-  const hasBank = game.mode !== 'football';
   const hasTurnTimer = game.mode === 'speed' || game.mode === 'football';
 
-  const clocksHtml = hasBank ? `
+  const clocksHtml = `
     <div class="clocks">
       <div class="clock" id="clockMe"><div class="name">${game.myName}</div><div class="time">${fmtTime(game.timeLeft[game.youAre])}</div></div>
       <div class="clock" id="clockOpp"><div class="name">${game.opponentName}</div><div class="time">${fmtTime(game.timeLeft[1 - game.youAre])}</div></div>
-    </div>
-  ` : `
-    <div class="clocks">
-      <div class="clock" id="clockMe"><div class="name">${game.myName}</div></div>
-      <div class="clock" id="clockOpp"><div class="name">${game.opponentName}</div></div>
     </div>
   `;
 
@@ -770,26 +768,21 @@ function renderGame() {
 
 function updateClocksUI() {
   if (!game) return;
-  const hasBank = game.mode !== 'football';
   const hasTurnTimer = game.mode === 'speed' || game.mode === 'football';
 
   const meEl = document.getElementById('clockMe');
   const oppEl = document.getElementById('clockOpp');
   if (meEl) {
     meEl.classList.toggle('active', game.turn === game.youAre);
-    if (hasBank) {
-      meEl.classList.toggle('low', game.timeLeft[game.youAre] < 15000);
-      const t = meEl.querySelector('.time');
-      if (t) t.textContent = fmtTime(game.timeLeft[game.youAre]);
-    }
+    meEl.classList.toggle('low', game.timeLeft[game.youAre] < 15000);
+    const t = meEl.querySelector('.time');
+    if (t) t.textContent = fmtTime(game.timeLeft[game.youAre]);
   }
   if (oppEl) {
     oppEl.classList.toggle('active', game.turn !== game.youAre);
-    if (hasBank) {
-      oppEl.classList.toggle('low', game.timeLeft[1 - game.youAre] < 15000);
-      const t = oppEl.querySelector('.time');
-      if (t) t.textContent = fmtTime(game.timeLeft[1 - game.youAre]);
-    }
+    oppEl.classList.toggle('low', game.timeLeft[1 - game.youAre] < 15000);
+    const t = oppEl.querySelector('.time');
+    if (t) t.textContent = fmtTime(game.timeLeft[1 - game.youAre]);
   }
 
   if (hasTurnTimer) {

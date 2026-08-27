@@ -51,7 +51,13 @@
     to   { opacity: 1; transform: translateY(0); }
   }
   .logo { display: block; width: 300px; max-width: 88%; margin: 2px auto 2px; }
-  .tagline { text-align: center; color: var(--muted); font-size: 10.5px; letter-spacing: 1.5px; margin: 0 0 2px; }
+  .nickname-box { position: relative; margin: 10px 0 6px; }
+  .nickname-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+  .nickname-box input {
+    margin: 0; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px 12px 40px; text-align: left;
+  }
+  .nickname-box:focus-within .nickname-icon { color: var(--accent); }
   h1 {
     margin: 4px 0 0; font-size: 28px; text-align: center; letter-spacing: 6px;
     color: var(--ink); font-weight: 400; text-transform: uppercase;
@@ -256,14 +262,14 @@
   .rules { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 10px; }
   .rules-summary {
     cursor: pointer; color: var(--ink-soft); font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
-    user-select: none; padding: 10px 4px; display: flex; align-items: center; gap: 12px;
+    user-select: none; padding: 10px 4px; display: flex; align-items: center; justify-content: center; gap: 12px;
     transition: color .15s, transform .1s; background: transparent; border: none;
-    width: 100%; text-align: left; font-family: inherit;
+    width: 100%; text-align: center; font-family: inherit;
   }
   .rules-summary:hover { color: var(--ink); background: transparent; }
   .rules-summary:active { transform: translateY(1px); opacity: .7; }
   .rules-summary.open { color: var(--accent); }
-  .rules-summary .chevron { margin-left: auto; transition: transform .25s ease; color: var(--muted); }
+  .rules-summary .chevron { transition: transform .25s ease; color: var(--muted); }
   .rules-summary.open .chevron { transform: rotate(90deg); color: var(--accent); }
   .rules-panel { max-height: 0; overflow: hidden; transition: max-height .32s cubic-bezier(.4,0,.2,1); }
   .rules-body {

@@ -258,19 +258,21 @@ jde nasadit i na Railway.app, Fly.io nebo jiný Node.js hosting.)*
 - Na výsledkové obrazovce je sbalitelná **historie slov** celého kola —
   kdo co napsal a v jakém pořadí.
 - Za každé **správně** odeslané slovo dostaneš **bonus k hlavnímu času**
-  (+3 s, v režimu 1 písmeno +1 s) — nejde ale přesáhnout startovní hodnotu.
-  Slovní fotbal bonus nemá (nemá "banku", jen zkracující se čas na tah).
+  (+3 s, v režimech 1 písmeno a Slovní fotbal +1 s) — nejde ale přesáhnout
+  startovní hodnotu.
 - **Žebříček** je samostatná stránka dostupná z hlavního menu, s vlastním
   přepínačem režimu, a zobrazuje max. **100 nejlepších** hráčů daného
   režimu.
 - **Slovní fotbal** — nový herní režim (nahradil "3 písmena"): střídáte se
   v psaní slov, kde každé další musí začínat na poslední písmeno toho
-  předchozího. Na první slovo 30 s, každé další slovo zkrátí limit na
-  příští tah o 1 s. ⚠️ **Omezení:** pravidlo "pouze podstatná jména" se
-  aktuálně **nevynucuje** — slovník (Hunspell cs_CZ) nemá u slov uložený
-  slovní druh, takže je technicky možné navázat i slovesem/přídavným
-  jménem apod. Řešením by bylo napojit slovník se značkami slovních druhů
-  (např. MorfFlex) — dej vědět, pokud to chceš doplnit.
+  předchozího. Časomíra je stejná jako u režimu 1 písmeno — 60 s hlavního
+  času (šachové hodiny) + 10 s na každý jednotlivý tah. Dlouhá/krátká
+  varianta samohlásky (např. „á"/„a") a „y"/„i" se počítají jako stejné
+  písmeno. ⚠️ **Omezení:** pravidlo "pouze podstatná jména" se aktuálně
+  **nevynucuje** — slovník (Hunspell cs_CZ) nemá u slov uložený slovní
+  druh, takže je technicky možné navázat i slovesem/přídavným jménem apod.
+  Řešením by bylo napojit slovník se značkami slovních druhů (např.
+  MorfFlex) — dej vědět, pokud to chceš doplnit.
 
 ---
 
