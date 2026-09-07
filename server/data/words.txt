@@ -1,5 +1,3 @@
-aachen
-aacr
 aakjaer
 aakjaerová
 aakjaerův
@@ -958,6 +956,7 @@ afrikáta
 afričan
 afričanka
 afričančin
+afro
 afroamerický
 afroameričan
 afroameričanka
@@ -37465,7 +37464,6 @@ džínsy
 džínsů
 džínsům
 džíny
-džínů
 džíp
 džókhang
 eagleton
@@ -67734,6 +67732,7 @@ juščáková
 juščík
 juščíková
 južnyj
+jysk
 já
 jáchim
 jáchimová
@@ -81151,6 +81150,7 @@ kradmější
 kradoucí
 kraemer
 kraemerová
+krafat
 krafek
 kraffer
 krafferová
@@ -99276,6 +99276,7 @@ mažáriová
 mažárová
 mb
 mbabanský
+mbappé
 mbar
 mca
 mccarthismus
@@ -103103,7 +103104,6 @@ mjartan
 mjartanová
 mk
 mks
-ml
 mlada
 mladcová
 mladecko
@@ -194894,6 +194894,7 @@ tapetářský
 tapioka
 tapiserie
 tapisérie
+taplákách
 taptič
 taptičová
 tapušík
@@ -195982,7 +195983,6 @@ teplovzdušný
 teplá
 teplákový
 tepláky
-teplákách
 teplání
 teplárek
 teplárenský
@@ -226094,6 +226094,7 @@ yahoo
 yalom
 yalomová
 yamaha
+yamal
 yamin
 yaminová
 yamoussokerský
@@ -231597,7 +231598,6 @@ zaúčtovávaný
 zaúčtovávat
 zaúčtovávání
 zaúřadovat
-zač
 začadit
 začaděný
 začal
@@ -240758,7 +240758,6 @@ zživotnění
 ázerbájdžánský
 ázerbájdžánčin
 ázerbájdžánština
-áách
 áč
 áčko
 áčkový
@@ -245993,6 +245992,7 @@ zživotnění
 šatra
 šatrová
 šatstvo
+šaty
 šatánek
 šatánková
 šaub

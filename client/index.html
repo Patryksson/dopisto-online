@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --paper: #0a0a0a;
@@ -45,6 +45,7 @@
     border: 1px solid var(--line);
     box-shadow: 0 30px 70px rgba(0,0,0,.65), 0 1px 0 rgba(255,255,255,.06) inset;
     animation: cardFadeIn .3s ease;
+    will-change: transform, opacity;
   }
   @keyframes cardFadeIn {
     from { opacity: 0; transform: translateY(6px); }
@@ -135,7 +136,7 @@
   .letter-tile.mystery { color: var(--muted); border-style: dashed; animation: mysteryPulse 1.6s ease-in-out infinite; }
   @keyframes mysteryPulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 
-  .letter-tiles.reveal { animation: tilesReveal .5s cubic-bezier(.34,1.56,.64,1); }
+  .letter-tiles.reveal { animation: tilesReveal .5s cubic-bezier(.34,1.56,.64,1); will-change: transform, opacity; }
   @keyframes tilesReveal {
     from { transform: scale(.35); opacity: 0; }
     to   { transform: scale(1); opacity: 1; }
@@ -165,7 +166,7 @@
   }
   .turn-preview span { color: var(--accent); font-weight: 700; }
 
-  .draw-pop { display: inline-block; animation: drawPop .5s cubic-bezier(.34,1.56,.64,1); }
+  .draw-pop { display: inline-block; animation: drawPop .5s cubic-bezier(.34,1.56,.64,1); will-change: transform, opacity; }
   @keyframes drawPop {
     0%   { transform: scale(.4); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }
@@ -192,7 +193,7 @@
   }
   .last-word.p0 { color: var(--win-ink); }
   .last-word.p1 { color: var(--accent); }
-  .last-word.pop { animation: lastWordPop .3s ease; }
+  .last-word.pop { animation: lastWordPop .3s ease; will-change: transform; }
   @keyframes lastWordPop {
     0%   { transform: scale(1.12); }
     100% { transform: scale(1); }
@@ -234,30 +235,33 @@
   .mode-preview-row span.active { color: var(--accent); font-weight: 700; }
 
   .mode-segmented {
+    position: relative;
     display: flex; align-items: stretch; gap: 2px;
     background: var(--paper-2); border: 1px solid var(--line);
     border-radius: 999px; padding: 4px; margin-bottom: 10px;
   }
+  .seg-indicator {
+    position: absolute; top: 4px; bottom: 4px; left: 4px; width: 0;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--accent), #d92e24);
+    box-shadow: 0 4px 12px rgba(255,59,48,.35);
+    transition: left .3s cubic-bezier(.34,1.1,.64,1), width .3s cubic-bezier(.34,1.1,.64,1);
+    z-index: 0;
+  }
   .seg-btn {
+    position: relative; z-index: 1;
     flex: 1; padding: 9px 3px; border-radius: 999px; border: none;
     background: transparent; color: var(--muted);
     font-family: inherit; font-size: 9.5px; letter-spacing: .6px; line-height: 1.2;
     cursor: pointer; white-space: normal; text-align: center;
-    transition: background .15s, color .15s, transform .1s;
+    transition: color .2s;
     touch-action: manipulation;
   }
-  .seg-btn.active {
-    background: linear-gradient(180deg, var(--accent), #d92e24); color: #fff; font-weight: 700;
-    box-shadow: 0 4px 12px rgba(255,59,48,.35);
-    animation: modePop .22s ease;
-  }
+  .seg-btn.active { color: #fff; font-weight: 700; }
   .seg-btn:active { transform: scale(.96); }
-  @keyframes modePop {
-    0%   { transform: scale(.94); }
-    60%  { transform: scale(1.02); }
-    100% { transform: scale(1); }
-  }
   .ic-lg { font-size: 22px; }
+
+  #leaderboardBody { transition: opacity .15s ease; }
 
   .rules { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 10px; }
   .rules-summary {
@@ -303,7 +307,7 @@
     60% { transform: translateX(-3px); }
     80% { transform: translateX(3px); }
   }
-  .card.shake { animation: cardShake .3s; }
+  .card.shake { animation: cardShake .3s; will-change: transform; }
 
   .penalty-note { color: var(--accent); font-weight: 700; }
 
@@ -337,6 +341,7 @@
     border: 3px solid var(--paper-2);
     border-top-color: var(--accent);
     animation: spin 0.9s linear infinite;
+    will-change: transform;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -390,6 +395,7 @@
     position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
     font-size: 26px; pointer-events: none;
     animation: reactionFloat 1.4s ease-out forwards;
+    will-change: transform, opacity;
   }
   @keyframes reactionFloat {
     0%   { opacity: 0; transform: translate(-50%, 0) scale(.6); }
@@ -402,6 +408,7 @@
     position: absolute; bottom: -4px; right: 6px;
     font-size: 15px; font-weight: 700; color: var(--win-ink); pointer-events: none;
     animation: bonusFloat 1s ease-out forwards;
+    will-change: transform, opacity;
   }
   @keyframes bonusFloat {
     0%   { opacity: 0; transform: translateY(0) scale(.7); }
@@ -415,6 +422,18 @@
     .letter-tile { width: 38px; height: 38px; font-size: 17px; }
     .countdown-num { font-size: 48px; }
     .lobby-code { font-size: 34px; letter-spacing: 6px; }
+  }
+
+  /* Respektuje systémové nastavení "omezit pohyb" — vypne/zkrátí animace.
+     Pomáhá přístupnosti i výkonu/baterii na slabších mobilech, kde bývá
+     tohle nastavení běžně zapnuté schválně kvůli úspoře. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 </style>
 </head>

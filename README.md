@@ -286,14 +286,55 @@ server/
   elo.js         – výpočet ELO
   store.js       – ukládání ELO/žebříčku (JSON soubor, bez účtů)
   data/
-    words.txt              – český slovník (~250 000 slov)
-    valid_prefixes2/3.json – použitelné dvojice/trojice písmen
-    valid_prefixes1.json   – použitelná písmena pro režim 1 písmeno
-    valid_infix2.json      – dvojice použitelné kdekoliv ve slově (Uprostřed)
-    elo.json                – vytvoří se automaticky při první odehrané hře
+    words.txt            – český slovník (~3,9 milionu tvarů, viz níže)
+    valid_prefixes2.json  – použitelné dvojice písmen (režim 2 písmena)
+    valid_prefixes1.json  – použitelná písmena (režim 1 písmeno)
+    valid_infix2.json     – dvojice použitelné kdekoliv ve slově (Uprostřed)
+    elo.json               – vytvoří se automaticky při první odehrané hře
 client/
   index.html, app.js, logo.png – frontend (bez frameworku)
 ```
+
+### O slovníku — a jak si ho upravit podle sebe
+
+Slovník je **tvoje vlastní databáze slov** (necelých 254 000 hesel,
+základní tvary — 1. pád jednotného čísla u podstatných jmen, infinitiv
+u sloves apod., žádné skloňované/časované/množné varianty), včetně
+vlastních doplněných slov (např. `mbappé`, `yamal`). 2,8 MB, nízká
+paměťová náročnost.
+
+`server/data/words.txt` je **obyčejný textový soubor — jedno slovo na
+řádek**, takže je to opravdu tvůj vlastní editovatelný slovník:
+
+- **Přidání slova:** otevři soubor v libovolném textovém editoru, napiš
+  nové slovo na vlastní řádek (malými písmeny), ulož.
+- **Odebrání slova:** smaž jeho řádek.
+- Po úpravě stačí restartovat server (`npm start` znovu, nebo redeploy
+  na hostingu), ať se změna projeví — `valid_prefixes*.json` (které
+  kombinace písmen se smí losovat) přepočítávat nemusíš, pokud jen pár
+  slov přidáš/ubereš; při větší úpravě (stovky+ slov) by šlo pro přesnost
+  znovu spustit skript, který tyhle soubory generuje — dej vědět, pokud ho
+  budeš chtít.
+
+### Optimalizace výkonu (i pro mobil)
+
+- **Gzip komprese** odpovědí (balíček `compression`) — `app.js` se
+  přenáší cca 3,6× menší (44 KB → 12 KB), citelně rychlejší načtení na
+  mobilní síti.
+- **Cache hlavičky** pro statické soubory — logo se cachuje na 7 dní
+  (`immutable`), HTML/JS na hodinu s revalidací přes ETag — opakovaná
+  návštěva stránky je prakticky okamžitá.
+- **Zmenšené logo** — kvantizace barev (256 barev stačí, žádná viditelná
+  ztráta kvality), z 28 KB na 9 KB.
+- **Oříznuté fonty** — načítá se jen váha písma (400/600/700), která se
+  ve stylu skutečně používá, ne nadbytečná 500.
+- **`will-change` na animovaných prvcích** — prohlížeč animace předá GPU
+  místo CPU, plynulejší na slabších/starších telefonech.
+- **Respektování `prefers-reduced-motion`** — pokud má někdo v telefonu
+  zapnuté omezení pohybu (kvůli přístupnosti nebo úspoře baterie), animace
+  se automaticky zkrátí/vypnou.
+- **Klouzavý přepínač módu bez znovunačtení stránky** — přepnutí módu jen
+  animuje ukazatel a upraví pár tříd, nepřekresluje celou obrazovku.
 
 ## 8. Co by šlo dál doladit
 

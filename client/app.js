@@ -96,20 +96,49 @@ function modePreviewText(m) {
 function modeSegmentedHtml(selected) {
   return `
     <div class="mode-preview-row">
-      ${MODE_ORDER.map(m => `<span class="${selected === m ? 'active' : ''}">${modePreviewText(m)}</span>`).join('')}
+      ${MODE_ORDER.map(m => `<span data-mode="${m}" class="${selected === m ? 'active' : ''}">${modePreviewText(m)}</span>`).join('')}
     </div>
-    <div class="mode-segmented">
+    <div class="mode-segmented" id="modeSegmented">
+      <div class="seg-indicator" id="segIndicator"></div>
       ${MODE_ORDER.map(m => `<button class="seg-btn ${selected === m ? 'active' : ''}" data-mode="${m}">${MODE_LABEL[m]}</button>`).join('')}
     </div>
   `;
 }
 
-function bindModeSegmented(onSelect) {
+// Posune klouzavý indikátor na pozici aktivního tlačítka. Bez animace
+// (animate=false) se použije jen při prvním vykreslení, ať pilulka
+// nenajíždí odnikud, ale je hned na svém místě.
+function positionModeIndicator(animate) {
+  const wrap = document.getElementById('modeSegmented');
+  const indicator = document.getElementById('segIndicator');
+  const active = wrap && wrap.querySelector('.seg-btn.active');
+  if (!wrap || !indicator || !active) return;
+  if (!animate) indicator.style.transition = 'none';
+  indicator.style.left = active.offsetLeft + 'px';
+  indicator.style.width = active.offsetWidth + 'px';
+  if (!animate) {
+    void indicator.offsetWidth; // vynutí reflow před obnovením přechodu
+    indicator.style.transition = '';
+  }
+}
+
+// Místo prokliknutí (znovuvykreslení) celé stránky jen animuje indikátor
+// a přepne třídy — žádný blik, žádné zbytečné znovusestavení DOM. Volitelný
+// onModeChange callback dostane nový mód pro cokoliv, co reálně potřebuje
+// data (např. znovunačtení žebříčku).
+function bindModeSegmented(getMode, onModeChange) {
+  positionModeIndicator(false);
   document.querySelectorAll('.seg-btn').forEach(btn => {
     btn.onclick = () => {
       const m = btn.dataset.mode;
       const newMode = (m === '2') ? Number(m) : m;
-      onSelect(newMode);
+      if (newMode === getMode()) return;
+
+      document.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('.mode-preview-row span').forEach(s => s.classList.toggle('active', s.dataset.mode === m));
+      positionModeIndicator(true);
+
+      if (onModeChange) onModeChange(newMode);
     };
   });
 }
@@ -423,7 +452,7 @@ function renderMenu(notice) {
   `;
 
   document.getElementById('soundBtn').onclick = toggleSound;
-  bindModeSegmented((newMode) => { selectedMode = newMode; renderMenu(); });
+  bindModeSegmented(() => selectedMode, (newMode) => { selectedMode = newMode; });
 
   document.querySelectorAll('.rules-summary').forEach(btn => {
     btn.onclick = () => {
@@ -531,8 +560,22 @@ function renderLeaderboard(mode) {
     </div>
   `;
 
-  bindModeSegmented((newMode) => { selectedMode = newMode; renderLeaderboard(newMode); });
+  let currentLbMode = mode;
+  bindModeSegmented(() => currentLbMode, (newMode) => {
+    currentLbMode = newMode;
+    selectedMode = newMode;
+    loadLeaderboardBody(newMode);
+  });
   document.getElementById('backToMenuBtn').onclick = () => renderMenu();
+
+  loadLeaderboardBody(mode);
+}
+
+// Jen přenačte a jemně prolne obsah žebříčku — zbytek stránky (mode
+// přepínač, tlačítka) zůstává na místě, žádné blikání celé karty.
+function loadLeaderboardBody(mode) {
+  const body = document.getElementById('leaderboardBody');
+  if (body) body.style.opacity = '0.3';
 
   socket.emit('get_leaderboard', { mode }, (list) => {
     const body = document.getElementById('leaderboardBody');
@@ -544,6 +587,7 @@ function renderLeaderboard(mode) {
           ${list.map((p, i) => `<tr><td>${i + 1}</td><td>${p.name}</td><td>${p.elo}</td><td>${p.wins}/${p.losses}</td></tr>`).join('')}
         </tbody>
       </table>` : '<div style="color:var(--muted); text-align:center; padding:20px 0">Zatím nikdo v tomto režimu nehrál (max. 100 nejlepších).</div>';
+    body.style.opacity = '1';
   });
 }
 
