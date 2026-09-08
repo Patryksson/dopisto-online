@@ -257,7 +257,14 @@
     transition: color .2s;
     touch-action: manipulation;
   }
-  .seg-btn.active { color: #fff; font-weight: 700; }
+  /* Přebije obecné button:hover (šedé pozadí) — tady má barvu dávat jen
+     klouzavý indikátor pod tlačítkem, ne samotné tlačítko. */
+  .seg-btn:hover, .seg-btn:focus, .seg-btn:focus-visible {
+    background: transparent; color: var(--muted);
+  }
+  .seg-btn.active,
+  .seg-btn.active:hover,
+  .seg-btn.active:focus { color: #fff; font-weight: 700; }
   .seg-btn:active { transform: scale(.96); }
   .ic-lg { font-size: 22px; }
 

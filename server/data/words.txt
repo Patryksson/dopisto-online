@@ -3862,6 +3862,7 @@ aperitivní
 apertace
 apertura
 aperturní
+aperol
 apetauer
 apetauerová
 apetence
@@ -3985,6 +3986,7 @@ apoštolát
 apoštolátní
 apoštolštější
 appardův
+appel
 appassionato
 appeal
 appel
@@ -107743,6 +107745,7 @@ mžíčková
 na
 naadresovaný
 naakumulovaný
+naan
 naar
 naaranžovaný
 naaranžovat
@@ -113899,6 +113902,7 @@ nervózněný
 nervóznět
 nerád
 nerádová
+nerd
 nesa
 nescafé
 neschopa
@@ -114052,6 +114056,7 @@ nesčíslněkrát
 nesčíslněkráte
 nesňal
 nesňalová
+net
 netal
 netalová
 netanjahu
@@ -115401,6 +115406,7 @@ nok
 nokia
 nokturno
 nol
+nolan
 noll
 nollová
 nolová
@@ -115766,6 +115772,7 @@ novinářský
 novinářství
 novinářčin
 novinářštější
+noviny
 novisedlák
 novisedláková
 novičok
