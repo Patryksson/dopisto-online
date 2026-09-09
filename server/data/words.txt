@@ -3996,7 +3996,7 @@ appeltauer
 appeltauerová
 appeltová
 appelův
-appl
+Apple
 applet
 applová
 applt
@@ -115395,7 +115395,7 @@ nohálová
 noháč
 noháček
 noháčková
-noháčová
+noháčovás
 nohýl
 nohýlová
 nohýnek
@@ -197457,7 +197457,7 @@ tlačilová
 tlačit
 tlačka
 tlačkovací
-tlačkovaný
+tlačkovanýs
 tlačkovat
 tlačkování
 tlačný
@@ -197471,6 +197471,7 @@ tlejivka
 tlející
 tlelek
 tlelková
+tlemit
 tlení
 tleskající
 tleskaný
