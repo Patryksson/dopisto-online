@@ -72,7 +72,19 @@ function matchesRequiredLetter(word, requiredLetter) {
   return acceptableStartLetters(requiredLetter).some(l => word.startsWith(l));
 }
 
+// Denní výzva: pro každý den v roce (1-366, počítáno v UTC, ať mají všichni
+// na světě stejné zadání bez ohledu na časové pásmo) vrací vždy stejnou
+// dvojici písmen z režimu "2 písmena". Stejný den v roce = stejné zadání
+// každý rok dokola (žádná závislost na roce samotném).
+function dailyPattern(date = new Date()) {
+  const startOfYear = Date.UTC(date.getUTCFullYear(), 0, 1);
+  const today = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  const dayOfYear = Math.floor((today - startOfYear) / 86400000) + 1;
+  const idx = dayOfYear % VALID_PREFIXES.length;
+  return { type: 'prefix2', value: VALID_PREFIXES[idx] };
+}
+
 module.exports = {
   isValidWord, generatePattern, matchesPattern, patternInstruction,
-  acceptableStartLetters, matchesRequiredLetter,
+  acceptableStartLetters, matchesRequiredLetter, dailyPattern,
 };

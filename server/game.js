@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { isValidWord, generatePattern, matchesPattern, patternInstruction, acceptableStartLetters, matchesRequiredLetter } = require('./dictionary');
+const { isValidWord, generatePattern, matchesPattern, patternInstruction, acceptableStartLetters, matchesRequiredLetter, dailyPattern } = require('./dictionary');
 const store = require('./store');
 
 const MODES = [2, 'football', 'middle', 'speed'];
@@ -14,6 +14,11 @@ const PENALTY_WRONG_PATTERN_MS = 3000;
 const BONUS_MS_BY_MODE = { 2: 3000, middle: 3000, speed: 1000, football: 1000 };
 // Musí přibližně odpovídat délce odhalovací/odpočtové animace na klientu.
 const REVEAL_COUNTDOWN_MS = 3500;
+
+// Denní výzva — sólo, bez soupeře. Stejný bonus jako režim "2 písmena".
+const DAILY_TIME_MS = 180000;
+const DAILY_BONUS_MS = 3000;
+const dailySessions = new Map(); // socket.id -> session
 
 // Kolik času má hráč na znovupřipojení, než automaticky prohrává.
 const RECONNECT_GRACE_MS = 15000;
@@ -223,6 +228,72 @@ function setupGame(io, socket) {
     if (typeof cb === 'function') cb(store.leaderboard(mode, 100));
   });
 
+  // ==== Denní výzva — sólo, bez soupeře, jednou denně stejné zadání pro
+  // úplně všechny (viz dailyPattern v dictionary.js). ====
+  socket.on('start_daily_challenge', () => {
+    const existing = dailySessions.get(socket.id);
+    if (existing) {
+      clearInterval(existing.intervalId);
+      dailySessions.delete(socket.id);
+    }
+
+    const pattern = dailyPattern();
+    const session = {
+      pattern,
+      timeLeft: DAILY_TIME_MS,
+      usedWords: new Set(),
+      history: [],
+      finished: false,
+      lastTick: null,
+      intervalId: null,
+    };
+    dailySessions.set(socket.id, session);
+
+    socket.emit('daily_started', { pattern, timeLeft: session.timeLeft, countdownMs: REVEAL_COUNTDOWN_MS });
+
+    setTimeout(() => {
+      const s = dailySessions.get(socket.id);
+      if (!s || s.finished) return;
+      s.lastTick = Date.now();
+      s.intervalId = setInterval(() => tickDaily(socket), 200);
+    }, REVEAL_COUNTDOWN_MS);
+  });
+
+  socket.on('submit_daily_word', ({ word }) => {
+    const session = dailySessions.get(socket.id);
+    if (!session || session.finished) return;
+
+    const clean = (word || '').trim().toLowerCase();
+    if (!clean) return;
+
+    if (!matchesPattern(clean, session.pattern)) {
+      socket.emit('daily_word_rejected', { reason: patternInstruction(session.pattern) });
+      return;
+    }
+    if (session.usedWords.has(clean)) {
+      applyDailyPenalty(socket, session, PENALTY_ALREADY_USED_MS, 'Slovo už bylo použito!');
+      return;
+    }
+    if (!isValidWord(clean)) {
+      applyDailyPenalty(socket, session, PENALTY_NOT_IN_DICT_MS, 'Slovo není ve slovníku!');
+      return;
+    }
+
+    session.usedWords.add(clean);
+    session.history.push(clean);
+
+    const before = session.timeLeft;
+    session.timeLeft = Math.min(DAILY_TIME_MS, before + DAILY_BONUS_MS);
+    const bonusMs = session.timeLeft - before;
+
+    socket.emit('daily_state_update', {
+      timeLeft: Math.round(session.timeLeft),
+      usedWordsCount: session.usedWords.size,
+      lastWord: clean,
+      bonusMs,
+    });
+  });
+
   socket.on('rejoin_room', ({ roomId, youAre, token }) => {
     const room = rooms.get(roomId);
     if (!room || room.finished) {
@@ -263,6 +334,12 @@ function setupGame(io, socket) {
     removeFromQueues(socket);
     removeLobbyFor(socket);
 
+    const daily = dailySessions.get(socket.id);
+    if (daily) {
+      clearInterval(daily.intervalId);
+      dailySessions.delete(socket.id);
+    }
+
     for (const room of rooms.values()) {
       if (room.finished) continue;
       const idx = room.players.findIndex(p => p.socket.id === socket.id);
@@ -292,6 +369,36 @@ function setupGame(io, socket) {
       room.pendingDisconnect = { idx, timeout };
     }
   });
+}
+
+function tickDaily(socket) {
+  const session = dailySessions.get(socket.id);
+  if (!session || session.finished) return;
+  const now = Date.now();
+  const elapsed = now - session.lastTick;
+  session.lastTick = now;
+  session.timeLeft -= elapsed;
+
+  if (session.timeLeft <= 0) {
+    session.timeLeft = 0;
+    finishDaily(socket, session);
+    return;
+  }
+  socket.emit('daily_state_update', { timeLeft: Math.round(session.timeLeft), usedWordsCount: session.usedWords.size });
+}
+
+function applyDailyPenalty(socket, session, amountMs, label) {
+  socket.emit('daily_word_rejected', { reason: label, penaltyMs: amountMs });
+  session.timeLeft = Math.max(0, session.timeLeft - amountMs);
+  socket.emit('daily_state_update', { timeLeft: Math.round(session.timeLeft), usedWordsCount: session.usedWords.size });
+  if (session.timeLeft <= 0) finishDaily(socket, session);
+}
+
+function finishDaily(socket, session) {
+  session.finished = true;
+  clearInterval(session.intervalId);
+  socket.emit('daily_over', { wordCount: session.usedWords.size, words: session.history, pattern: session.pattern });
+  dailySessions.delete(socket.id);
 }
 
 function currentRequiredLetter(room) {

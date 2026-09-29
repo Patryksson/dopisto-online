@@ -419,6 +419,12 @@ function renderMenu(notice) {
         <button id="joinLobbyBtn">Připojit</button>
       </div>
 
+      <div class="or-sep"><span class="line"></span><span>nebo hraj sám</span><span class="line"></span></div>
+
+      <div class="menu-list">
+        <button class="menu-item" id="dailyBtn"><span class="ic">🔥</span><span>Denní výzva</span></button>
+      </div>
+
       <div class="rules">
         <button type="button" class="rules-summary" data-panel="p1"><span class="ic">ⓘ</span><span>Jak to funguje</span><span class="chevron">›</span></button>
         <div class="rules-panel" id="panel-p1"><div class="rules-body">${HOW_IT_WORKS_HTML}</div></div>
@@ -508,6 +514,14 @@ function renderMenu(notice) {
   setupCodeBoxes();
 
   document.getElementById('leaderboardLinkBtn').onclick = () => renderLeaderboard(selectedMode);
+  document.getElementById('dailyBtn').onclick = () => {
+    const n = getNickname();
+    const err = document.getElementById('err');
+    if (!n) { err.textContent = 'Zadej přezdívku.'; return; }
+    saveNickname(n);
+    ensureAudioCtx();
+    startDailyChallenge();
+  };
 }
 
 // Pět samostatných políček pro kód lobby — auto-přeskakování na další/
@@ -589,6 +603,265 @@ function loadLeaderboardBody(mode) {
       </table>` : '<div style="color:var(--muted); text-align:center; padding:20px 0">Zatím nikdo v tomto režimu nehrál (max. 100 nejlepších).</div>';
     body.style.opacity = '1';
   });
+}
+
+// ==== Denní výzva — sólo, bez soupeře ====
+// "Dnešní datum" pro kontrolu "už jsi dnes hrál" je lokální datum hráče
+// (jednoduché a předvídatelné pro uživatele); samotné zadání dne počítá
+// server podle UTC, takže je pro všechny na světě stejné — u půlnoci může
+// dojít k drobnému nesouladu mezi "tvým dnem" a "serverovým dnem", což je
+// u denních výzev běžný a neškodný detail.
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function dailyStorageKey() { return `dopisto_daily_${todayKey()}`; }
+
+function getSavedDailyResult() {
+  try {
+    const raw = localStorage.getItem(dailyStorageKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function saveDailyResult(data) {
+  try { localStorage.setItem(dailyStorageKey(), JSON.stringify(data)); } catch {}
+}
+
+let dailyState = null;
+
+function startDailyChallenge() {
+  const saved = getSavedDailyResult();
+  if (saved) {
+    renderDailyResult(saved, true);
+    return;
+  }
+  socket.emit('start_daily_challenge');
+  app.innerHTML = `
+    <div class="card" style="text-align:center">
+      <div class="spinner"></div>
+      <p style="color:var(--ink-soft); font-size:13px">Připravuji dnešní výzvu…</p>
+    </div>
+  `;
+}
+
+function renderDailyReveal(data) {
+  dailyState = {
+    pattern: data.pattern,
+    myName: loadNickname(),
+    timeLeft: data.timeLeft,
+    usedWordsCount: 0,
+    lastWholeSecond: 999,
+    lastHalfStep: 999,
+  };
+
+  app.innerHTML = `
+    <div class="card">
+      <div class="countdown-label">🔥 Denní výzva</div>
+      ${patternTilesHtml(data.pattern, 'reveal')}
+      <div class="countdown-num" id="countNum">3</div>
+    </div>
+  `;
+  ensureAudioCtx();
+  playGo();
+
+  let n = 3;
+  const numEl = document.getElementById('countNum');
+  function pulse(text) {
+    if (!numEl) return;
+    numEl.textContent = text;
+    numEl.classList.remove('pulse');
+    void numEl.offsetWidth;
+    numEl.classList.add('pulse');
+  }
+  function step() {
+    if (n > 0) {
+      pulse(String(n));
+      playTick();
+      n--;
+      setTimeout(step, 800);
+    } else {
+      pulse('START!');
+      playGo();
+      setTimeout(() => renderDailyGame(), 550);
+    }
+  }
+  setTimeout(step, 550);
+}
+
+function renderDailyGame() {
+  app.innerHTML = `
+    <div class="card">
+      <button class="icon-btn sound-toggle" id="soundBtn">${soundEnabled ? '♪' : '×'}</button>
+      ${patternTilesHtml(dailyState.pattern)}
+      <div class="used-count" id="usedCount">${patternInstruction(dailyState.pattern)} · Slov: 0</div>
+      <div class="clocks">
+        <div class="clock active" id="clockMe"><div class="name">${dailyState.myName}</div><div class="time">${fmtTime(dailyState.timeLeft)}</div></div>
+      </div>
+      <div class="error" id="gameErr"></div>
+      <div class="last-word" id="lastWordBanner"></div>
+      <div class="word-input">
+        <input id="wordInput" placeholder="${patternInputPlaceholder(dailyState.pattern)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" />
+        <button id="sendBtn">Odeslat</button>
+      </div>
+      <div class="feed" id="feed"></div>
+    </div>
+  `;
+  document.getElementById('soundBtn').onclick = toggleSound;
+
+  const wordInput = document.getElementById('wordInput');
+  document.getElementById('sendBtn').onclick = () => sendDailyWord();
+  wordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendDailyWord(); });
+  wordInput.addEventListener('focus', () => {
+    setTimeout(() => {
+      const banner = document.getElementById('lastWordBanner');
+      (banner || wordInput).scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 300);
+  });
+  wordInput.focus();
+
+  function sendDailyWord() {
+    const word = wordInput.value.trim();
+    if (!word) return;
+    wordInput.value = '';
+    socket.emit('submit_daily_word', { word });
+  }
+}
+
+function updateDailyClockUI() {
+  const el = document.getElementById('clockMe');
+  if (!el) return;
+  el.classList.toggle('low', dailyState.timeLeft < 15000);
+  const t = el.querySelector('.time');
+  if (t) t.textContent = fmtTime(dailyState.timeLeft);
+}
+
+function renderDailyResult(data, fromCache) {
+  const historyHtml = data.words.length ? data.words.map(w => `<div class="p0">${w}</div>`).join('')
+    : '<div style="color:var(--muted)">Ani jedno slovo se dnes nepovedlo — zkus to zítra znovu!</div>';
+
+  app.innerHTML = `
+    <div class="card result">
+      <h2 class="win">🔥 Denní výzva hotová!</h2>
+      <div style="color:var(--muted); font-size:13px">
+        Zadání: <b style="color:var(--accent)">${data.pattern.value.toUpperCase()}···</b>
+        ${fromCache ? ' · dnes už jsi hrál(a)' : ''}
+      </div>
+      <div style="font-family:'Archivo Black','Space Grotesk',sans-serif; font-size:64px; color:var(--accent); margin:14px 0 0; line-height:1;">${data.wordCount}</div>
+      <div style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:16px">SLOV ZA 180 SEKUND</div>
+
+      <div class="rules">
+        <button type="button" class="rules-summary" data-panel="dailyhist"><span class="ic">▤</span><span>Tvoje slova (${data.words.length})</span><span class="chevron">›</span></button>
+        <div class="rules-panel" id="panel-dailyhist"><div class="rules-body feed" style="max-height:220px">${historyHtml}</div></div>
+      </div>
+
+      <div class="menu-list" style="margin-top:20px">
+        <button class="menu-item" id="shareDailyBtn"><span class="ic">📤</span><span>Sdílet výsledek</span></button>
+        <button class="secondary small" id="dailyMenuBtn" style="width:100%">Zpět do menu</button>
+      </div>
+    </div>
+  `;
+
+  document.querySelectorAll('.rules-summary').forEach(btn => {
+    btn.onclick = () => {
+      const panel = document.getElementById('panel-' + btn.dataset.panel);
+      const isOpen = btn.classList.contains('open');
+      if (isOpen) { panel.style.maxHeight = '0px'; btn.classList.remove('open'); }
+      else { panel.style.maxHeight = panel.scrollHeight + 'px'; btn.classList.add('open'); }
+    };
+  });
+
+  document.getElementById('shareDailyBtn').onclick = () => shareDailyResult(data);
+  document.getElementById('dailyMenuBtn').onclick = () => renderMenu();
+}
+
+// Vykreslí výsledek na plátno a nabídne sdílení (Web Share API na mobilu)
+// nebo stažení obrázku (na PC).
+function generateDailyShareImage(data) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 600; canvas.height = 760;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, 600, 760);
+  ctx.fillStyle = '#ff3131';
+  ctx.fillRect(0, 0, 600, 12);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 42px Arial, sans-serif';
+  ctx.fillText('DOPIŠTO', 300, 100);
+
+  ctx.fillStyle = '#ff3131';
+  ctx.font = '700 20px Arial, sans-serif';
+  ctx.fillText('DENNÍ VÝZVA', 300, 132);
+
+  ctx.fillStyle = '#8890a6';
+  ctx.font = '16px Arial, sans-serif';
+  ctx.fillText(new Date().toLocaleDateString('cs-CZ'), 300, 160);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 46px Arial, sans-serif';
+  ctx.fillText(data.pattern.value.toUpperCase() + '···', 300, 230);
+
+  ctx.fillStyle = '#ff3131';
+  ctx.font = '700 130px Arial, sans-serif';
+  ctx.fillText(String(data.wordCount), 300, 390);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 22px Arial, sans-serif';
+  ctx.fillText('SLOV ZA 180 SEKUND', 300, 430);
+
+  ctx.fillStyle = '#8890a6';
+  ctx.font = '15px Arial, sans-serif';
+  const sample = data.words.slice(0, 14).join(' · ') || '—';
+  wrapCanvasText(ctx, sample, 300, 490, 500, 22);
+
+  ctx.fillStyle = '#5a5a5a';
+  ctx.font = '13px Arial, sans-serif';
+  ctx.fillText('dopisto.online', 300, 730);
+
+  return canvas;
+}
+
+function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(' ');
+  let line = '';
+  let curY = y;
+  for (const word of words) {
+    const testLine = line ? line + ' ' + word : word;
+    if (ctx.measureText(testLine).width > maxWidth && line) {
+      ctx.fillText(line, x, curY);
+      line = word;
+      curY += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  if (line) ctx.fillText(line, x, curY);
+}
+
+function shareDailyResult(data) {
+  const canvas = generateDailyShareImage(data);
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const file = new File([blob], 'dopisto-denni-vyzva.png', { type: 'image/png' });
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({
+        files: [file],
+        title: 'Dopišto — Denní výzva',
+        text: `Zvládl(a) jsem ${data.wordCount} slov v Denní výzvě Dopišto!`,
+      }).catch(() => {});
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'dopisto-denni-vyzva.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+  }, 'image/png');
 }
 
 // ==== Hledání soupeře (matchmaking) ====
@@ -978,6 +1251,90 @@ socket.on('lobby_expired', () => {
 socket.on('match_found', (data) => {
   currentLobbyCode = null;
   renderRevealCountdown(data);
+});
+
+// ==== Denní výzva — socket eventy ====
+socket.on('daily_started', (data) => {
+  renderDailyReveal(data);
+});
+
+socket.on('daily_state_update', (data) => {
+  if (!dailyState) return;
+  dailyState.timeLeft = data.timeLeft;
+
+  const remaining = data.timeLeft;
+  if (remaining <= 10000) {
+    const halfStep = Math.floor(remaining / 500);
+    if (halfStep !== dailyState.lastHalfStep) {
+      dailyState.lastHalfStep = halfStep;
+      if (halfStep > 0) playTickUrgent();
+    }
+  } else {
+    const wholeSecond = Math.ceil(remaining / 1000);
+    if (wholeSecond !== dailyState.lastWholeSecond) {
+      dailyState.lastWholeSecond = wholeSecond;
+      if (wholeSecond > 0) playTick();
+    }
+  }
+
+  if (data.lastWord) {
+    const feed = document.getElementById('feed');
+    const gameErr = document.getElementById('gameErr');
+    if (feed) {
+      const div = document.createElement('div');
+      div.className = 'p0';
+      div.textContent = data.lastWord;
+      feed.prepend(div);
+    }
+    playSwoosh();
+    if (gameErr) gameErr.textContent = '';
+
+    const usedCount = document.getElementById('usedCount');
+    if (usedCount) usedCount.textContent = `${patternInstruction(dailyState.pattern)} · Slov: ${data.usedWordsCount}`;
+
+    const lastWordBanner = document.getElementById('lastWordBanner');
+    if (lastWordBanner) {
+      lastWordBanner.className = 'last-word p0';
+      lastWordBanner.textContent = data.lastWord;
+      lastWordBanner.classList.remove('pop');
+      void lastWordBanner.offsetWidth;
+      lastWordBanner.classList.add('pop');
+    }
+
+    if (data.bonusMs) {
+      const clockEl = document.getElementById('clockMe');
+      if (clockEl) {
+        const el = document.createElement('div');
+        el.className = 'bonus-popup';
+        el.textContent = `+${(data.bonusMs / 1000).toFixed(0)}s`;
+        clockEl.appendChild(el);
+        setTimeout(() => el.remove(), 1000);
+      }
+    }
+  }
+
+  updateDailyClockUI();
+});
+
+socket.on('daily_word_rejected', ({ reason, penaltyMs }) => {
+  if (!dailyState) return;
+  const gameErr = document.getElementById('gameErr');
+  if (penaltyMs) {
+    playPenalty();
+    const clockEl = document.getElementById('clockMe');
+    const cardEl = document.querySelector('.card');
+    if (clockEl) { clockEl.classList.remove('penalty'); void clockEl.offsetWidth; clockEl.classList.add('penalty'); }
+    if (cardEl) { cardEl.classList.remove('shake'); void cardEl.offsetWidth; cardEl.classList.add('shake'); }
+    if (gameErr) gameErr.innerHTML = `<span class="penalty-note">${reason} (−${penaltyMs / 1000} s)</span>`;
+  } else if (gameErr) {
+    gameErr.textContent = reason;
+  }
+});
+
+socket.on('daily_over', (data) => {
+  saveDailyResult(data);
+  dailyState = null;
+  renderDailyResult(data, false);
 });
 
 socket.on('state_update', (data) => {

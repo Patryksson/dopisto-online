@@ -129232,6 +129232,7 @@ očisťující
 očitý
 očitější
 očividný
+očividně
 očividnější
 očičkama
 očičko
@@ -154068,6 +154069,7 @@ pyšnit
 pyšnová
 pyšnící
 pyšný
+pyšně
 pyšnější
 pyšnění
 pyšová
@@ -175601,6 +175603,8 @@ samozásobitel
 samozásobitelka
 samozásobitelný
 samozásobitelčin
+samozřejmost
+samozřejmě
 samozřejmý
 samozřejmější
 samoúčelný
@@ -207303,6 +207307,7 @@ užitek
 užitelný
 užitečný
 užitečnější
+užitečnost
 užitkový
 užitkovější
 užitný
@@ -209816,12 +209821,13 @@ velocipedistka
 velocipedistčin
 velocipéd
 velocipédový
+velociraptor
 velodrom
 veloduše
 veloplášť
 velová
 velryba
-velrybka
+velrybkas
 velrybovitý
 velrybář
 velrybářka
@@ -210098,6 +210104,7 @@ vepřovicový
 vepřovský
 vepřová
 vepřový
+vepřové
 vepří
 vepřík
 vepříkov
@@ -212232,6 +212239,7 @@ vlhkomilný
 vlhkomilnější
 vlhkoměr
 vlhkoměrný
+vlhkost
 vlhkostní
 vlhký
 vlhlavy
@@ -227840,6 +227848,7 @@ zajímatelný
 zajímatelnější
 zajímavý
 zajímavější
+zajímavost
 zajímavůstka
 zajímání
 zajíst
@@ -230744,6 +230753,7 @@ zateplování
 zateplovávaný
 zateplovávat
 zateplovávání
+zaterasit
 zatesknit
 zatetelení
 zatetelit
@@ -240605,6 +240615,7 @@ zředění
 zředěný
 zředěnější
 zřejmý
+zřejmě
 zřejmější
 zřekl
 zřeknout
@@ -240621,6 +240632,7 @@ zřetele
 zřetelehodný
 zřetelem
 zřetelný
+zřetelně
 zřetelnější
 zřetelový
 zřetězení
