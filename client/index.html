@@ -90,6 +90,7 @@
   .ic { width: 18px; flex: none; text-align: center; font-size: 15px; color: var(--muted); }
   button:hover .ic, button.active .ic { color: var(--accent); }
 
+  .word-history { text-transform: uppercase; letter-spacing: .06em; }
   .menu-item { justify-content: flex-start; text-align: left; }
 
   #startBtn, #goBtn {
@@ -252,7 +253,7 @@
     position: relative; z-index: 1;
     flex: 1; padding: 9px 3px; border-radius: 999px; border: none;
     background: transparent; color: var(--muted);
-    font-family: inherit; font-size: 9.5px; letter-spacing: .6px; line-height: 1.2;
+    font-family: inherit; font-size: 11px; letter-spacing: .6px; line-height: 1.2;
     cursor: pointer; white-space: normal; text-align: center;
     transition: color .2s;
     touch-action: manipulation;
@@ -410,6 +411,12 @@
     100% { opacity: 0; transform: translate(-50%, -46px) scale(.9); }
   }
 
+  .daily-bonus-chip { display:flex; align-items:center; justify-content:center; gap:6px; margin:8px auto; padding:6px 12px; width:fit-content; max-width:100%; border:1px solid rgba(255,59,59,.55); border-radius:999px; font-size:12px; letter-spacing:.04em; color:#fff; background:rgba(255,59,59,.08); }
+  .daily-bonus-chip .dbc-ic { color:#ff3b3b; }
+  .daily-bonus-chip.hit { animation: dbcHit .9s ease; }
+  @keyframes dbcHit { 0%{transform:scale(1);box-shadow:0 0 0 rgba(255,59,59,0)} 35%{transform:scale(1.12);box-shadow:0 0 18px rgba(255,59,59,.8)} 100%{transform:scale(1);box-shadow:0 0 0 rgba(255,59,59,0)} }
+  .daily-bonus-desc { text-align:center; font-size:12px; opacity:.65; margin:-2px 0 8px; }
+  .bonus-popup.daily-hit { color:#ff6b6b; font-size:.8em; top:-18px; white-space:nowrap; }
   .bonus-popup {
     position: absolute; bottom: -4px; right: 6px;
     font-size: 15px; font-weight: 700; color: var(--win-ink); pointer-events: none;

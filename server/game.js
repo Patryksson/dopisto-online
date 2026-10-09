@@ -1,17 +1,16 @@
 const crypto = require('crypto');
 const { isValidWord, generatePattern, matchesPattern, patternInstruction, acceptableStartLetters, matchesRequiredLetter, dailyPattern } = require('./dictionary');
 const store = require('./store');
+const { dailyBonusForDate, checkDailyBonus, publicBonus, DAILY_BONUS_EXTRA_MS } = require('./dailyBonus');
 
-const MODES = [2, 'football', 'middle', 'speed'];
-// Slovní fotbal má teď stejnou časomíru jako "1 písmeno" (speed) — 60 s
-// hlavního času (banka) + 10 s na každý jednotlivý tah.
-const BANK_TIME_BY_MODE = { 2: 90000, middle: 90000, speed: 60000, football: 60000 };
-const TURN_TIME_MS = 10000; // čas na jeden tah — "speed" i "football"
+const MODES = [2, 'middle', 'speed'];
+const BANK_TIME_BY_MODE = { 2: 90000, middle: 90000, speed: 60000 };
+const TURN_TIME_MS = 10000; // čas na jeden tah — režim "speed"
 const PENALTY_NOT_IN_DICT_MS = 1000;
 const PENALTY_ALREADY_USED_MS = 3000;
 const PENALTY_WRONG_PATTERN_MS = 3000;
 // Bonus k hlavnímu času za každé správně odeslané slovo.
-const BONUS_MS_BY_MODE = { 2: 3000, middle: 3000, speed: 1000, football: 1000 };
+const BONUS_MS_BY_MODE = { 2: 3000, middle: 3000, speed: 1000 };
 // Musí přibližně odpovídat délce odhalovací/odpočtové animace na klientu.
 const REVEAL_COUNTDOWN_MS = 3500;
 
@@ -27,7 +26,7 @@ const RECONNECT_GRACE_MS = 15000;
 const ALLOWED_REACTIONS = ['👍', '😂', '🔥', '🤔', '💀', '⏳'];
 const REACTION_COOLDOWN_MS = 1000;
 
-const waitingQueue = { 2: [], football: [], middle: [], speed: [] };
+const waitingQueue = { 2: [], middle: [], speed: [] };
 const lobbies = new Map(); // code -> { socket, nickname, elo, mode, timeout }
 const rooms = new Map(); // roomId -> room state
 
@@ -159,14 +158,7 @@ function setupGame(io, socket) {
     const clean = (word || '').trim().toLowerCase();
     if (!clean) return;
 
-    if (room.mode === 'football') {
-      const requiredLetter = currentRequiredLetter(room);
-      if (requiredLetter && !matchesRequiredLetter(clean, requiredLetter)) {
-        const options = acceptableStartLetters(requiredLetter).map(l => `"${l}"`).join(' nebo ');
-        socket.emit('word_rejected', { reason: `Slovo musí začínat na ${options}.` });
-        return;
-      }
-    } else if (!matchesPattern(clean, room.pattern)) {
+    if (!matchesPattern(clean, room.pattern)) {
       if (room.pattern.type === 'infix2') {
         applyPenalty(io, room, idx, PENALTY_WRONG_PATTERN_MS, 'Slovo neobsahuje daná písmena!');
       } else {
@@ -191,14 +183,14 @@ function setupGame(io, socket) {
     // startovní hodnotu banky daného režimu.
     const bank = BANK_TIME_BY_MODE[room.mode];
     const before = room.timeLeft[idx];
-    room.timeLeft[idx] = Math.min(bank, before + BONUS_MS_BY_MODE[room.mode]);
+    const dailyBonusHit = checkDailyBonus(room.dailyBonus, { word: clean, myTimeLeft: before, opponentTimeLeft: room.timeLeft[1 - idx] });
+    room.timeLeft[idx] = Math.min(bank, before + BONUS_MS_BY_MODE[room.mode] + (dailyBonusHit ? DAILY_BONUS_EXTRA_MS : 0));
     const bonusMs = room.timeLeft[idx] - before;
 
     room.turn = 1 - idx;
-    if (room.mode === 'speed' || room.mode === 'football') room.turnTimer = TURN_TIME_MS;
+    if (room.mode === 'speed') room.turnTimer = TURN_TIME_MS;
 
-    const extra = { lastWord: clean, lastPlayerIdx: idx, bonusMs, bonusPlayerIdx: idx };
-    if (room.mode === 'football') extra.requiredLetter = clean.slice(-1);
+    const extra = { lastWord: clean, lastPlayerIdx: idx, bonusMs, bonusPlayerIdx: idx, dailyBonusHit };
     broadcastState(io, room, extra);
   });
 
@@ -230,6 +222,8 @@ function setupGame(io, socket) {
 
   // ==== Denní výzva — sólo, bez soupeře, jednou denně stejné zadání pro
   // úplně všechny (viz dailyPattern v dictionary.js). ====
+  socket.on('get_daily_bonus', (cb) => { if (typeof cb === 'function') cb(publicBonus(dailyBonusForDate())); });
+
   socket.on('start_daily_challenge', () => {
     const existing = dailySessions.get(socket.id);
     if (existing) {
@@ -240,6 +234,7 @@ function setupGame(io, socket) {
     const pattern = dailyPattern();
     const session = {
       pattern,
+      dailyBonus: dailyBonusForDate(),
       timeLeft: DAILY_TIME_MS,
       usedWords: new Set(),
       history: [],
@@ -249,7 +244,7 @@ function setupGame(io, socket) {
     };
     dailySessions.set(socket.id, session);
 
-    socket.emit('daily_started', { pattern, timeLeft: session.timeLeft, countdownMs: REVEAL_COUNTDOWN_MS });
+    socket.emit('daily_started', { pattern, dailyBonus: publicBonus(session.dailyBonus), timeLeft: session.timeLeft, countdownMs: REVEAL_COUNTDOWN_MS });
 
     setTimeout(() => {
       const s = dailySessions.get(socket.id);
@@ -257,6 +252,12 @@ function setupGame(io, socket) {
       s.lastTick = Date.now();
       s.intervalId = setInterval(() => tickDaily(socket), 200);
     }, REVEAL_COUNTDOWN_MS);
+  });
+
+  socket.on('end_daily_challenge', () => {
+    const session = dailySessions.get(socket.id);
+    if (!session || session.finished) return;
+    finishDaily(socket, session);
   });
 
   socket.on('submit_daily_word', ({ word }) => {
@@ -283,7 +284,8 @@ function setupGame(io, socket) {
     session.history.push(clean);
 
     const before = session.timeLeft;
-    session.timeLeft = Math.min(DAILY_TIME_MS, before + DAILY_BONUS_MS);
+    const dailyBonusHit = checkDailyBonus(session.dailyBonus, { word: clean, myTimeLeft: before, opponentTimeLeft: null });
+    session.timeLeft = Math.min(DAILY_TIME_MS, before + DAILY_BONUS_MS + (dailyBonusHit ? DAILY_BONUS_EXTRA_MS : 0));
     const bonusMs = session.timeLeft - before;
 
     socket.emit('daily_state_update', {
@@ -291,6 +293,7 @@ function setupGame(io, socket) {
       usedWordsCount: session.usedWords.size,
       lastWord: clean,
       bonusMs,
+      dailyBonusHit,
     });
   });
 
@@ -401,19 +404,14 @@ function finishDaily(socket, session) {
   dailySessions.delete(socket.id);
 }
 
-function currentRequiredLetter(room) {
-  if (room.mode !== 'football' || room.history.length === 0) return null;
-  return room.history[room.history.length - 1].word.slice(-1);
-}
-
 function startMatch(io, a, b, mode) {
   const roomId = 'room_' + Math.random().toString(36).slice(2, 10);
   const turnStart = Math.random() < 0.5 ? 0 : 1;
 
-  const pattern = mode === 'football' ? { type: 'football' } : generatePattern(mode);
+  const pattern = generatePattern(mode);
   const bank = BANK_TIME_BY_MODE[mode];
   const timeLeft = [bank, bank];
-  const turnTimer = (mode === 'speed' || mode === 'football') ? TURN_TIME_MS : null;
+  const turnTimer = mode === 'speed' ? TURN_TIME_MS : null;
 
   const room = {
     id: roomId,
@@ -432,6 +430,7 @@ function startMatch(io, a, b, mode) {
     lastTick: null,
     intervalId: null,
     pendingDisconnect: null,
+    dailyBonus: dailyBonusForDate(),
   };
   rooms.set(roomId, room);
 
@@ -441,6 +440,7 @@ function startMatch(io, a, b, mode) {
   const basePayload = {
     roomId, mode, pattern, turn: turnStart, timeLeft: room.timeLeft,
     turnTimer: room.turnTimer, countdownMs: REVEAL_COUNTDOWN_MS, requiredLetter: null,
+    dailyBonus: publicBonus(room.dailyBonus),
   };
   a.socket.emit('match_found', {
     ...basePayload, opponent: b.nickname, youAre: 0,
@@ -474,7 +474,7 @@ function tickRoom(io, room) {
   const active = room.turn;
   room.timeLeft[active] -= elapsed;
 
-  if (room.mode === 'speed' || room.mode === 'football') {
+  if (room.mode === 'speed') {
     room.turnTimer -= elapsed;
     if (room.turnTimer <= 0) {
       room.turnTimer = 0;
@@ -495,7 +495,7 @@ function tickRoom(io, room) {
 }
 
 function broadcastState(io, room, extra = {}) {
-  const hasTurnTimer = room.mode === 'speed' || room.mode === 'football';
+  const hasTurnTimer = room.mode === 'speed';
   io.to(room.id).emit('state_update', {
     turn: room.turn,
     timeLeft: room.timeLeft.map(t => Math.max(0, Math.round(t))),

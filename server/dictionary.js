@@ -76,12 +76,47 @@ function matchesRequiredLetter(word, requiredLetter) {
 // na světě stejné zadání bez ohledu na časové pásmo) vrací vždy stejnou
 // dvojici písmen z režimu "2 písmena". Stejný den v roce = stejné zadání
 // každý rok dokola (žádná závislost na roce samotném).
+// Denní výzva: pořadí párů se v každém "cyklu" (délka = počet párů) míchá
+// deterministicky, takže všichni mají ve stejný den stejné zadání. Navíc se
+// hlídá, aby dva po sobě jdoucí dny (a pokud to jde i dny s mezerou 1)
+// nezačínaly stejným písmenem — např. "se" a hned "sa".
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const _cycleCache = [];
+function dailyCycle(c) {
+  if (_cycleCache[c]) return _cycleCache[c];
+  const prev = c > 0 ? dailyCycle(c - 1) : [];
+  const rnd = mulberry32(1000003 * (c + 1));
+  const pool = VALID_PREFIXES.slice();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const seq = [];
+  const history = prev.slice(-2);
+  while (pool.length) {
+    const last = (seq.length ? seq : history).slice(-2).concat();
+    const ctx = seq.length >= 2 ? seq.slice(-2) : history.concat(seq).slice(-2);
+    const l1 = ctx[ctx.length - 1] && ctx[ctx.length - 1][0];
+    const l2 = ctx.length > 1 && ctx[0][0];
+    let k = pool.findIndex(p => p[0] !== l1 && p[0] !== l2);
+    if (k === -1) k = pool.findIndex(p => p[0] !== l1);
+    if (k === -1) k = 0;
+    seq.push(pool.splice(k, 1)[0]);
+  }
+  return (_cycleCache[c] = seq);
+}
 function dailyPattern(date = new Date()) {
-  const startOfYear = Date.UTC(date.getUTCFullYear(), 0, 1);
-  const today = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-  const dayOfYear = Math.floor((today - startOfYear) / 86400000) + 1;
-  const idx = dayOfYear % VALID_PREFIXES.length;
-  return { type: 'prefix2', value: VALID_PREFIXES[idx] };
+  const dayIndex = Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / 86400000);
+  const n = VALID_PREFIXES.length;
+  const c = Math.floor(dayIndex / n);
+  return { type: 'prefix2', value: dailyCycle(c)[dayIndex % n] };
 }
 
 module.exports = {

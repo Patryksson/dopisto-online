@@ -11,12 +11,7 @@ function patternTilesHtml(pattern, extraClass) {
   return `<div class="${cls}">${letterTiles}<div class="letter-tile dim">···</div></div>`;
 }
 
-// Slovní fotbal nemá pevné zadání (žádná písmena k odhalení) — zvláštní blok.
 function patternDisplayBlock(pattern, extraClass) {
-  if (pattern.type === 'football') {
-    const cls = `letter-tiles${extraClass ? ' ' + extraClass : ''}`;
-    return `<div class="${cls}"><div class="letter-tile dim" style="width:auto; padding:0 18px; font-size:18px;">⚽</div></div>`;
-  }
   return patternTilesHtml(pattern, extraClass);
 }
 
@@ -30,40 +25,8 @@ function patternInputPlaceholder(pattern) {
   return `Napiš slovo na '${pattern.value}'…`;
 }
 
-// Slovní fotbal: dlouhá a krátká varianta samohlásky se počítají jako
-// stejné písmeno, "y"/"i" navíc taky (znějí stejně) — jen pro zobrazení,
-// validace je na serveru.
-const VOWEL_EQUIV = {
-  a: ['á'], á: ['a'],
-  e: ['é'], é: ['e'],
-  i: ['í', 'y'], í: ['i'],
-  o: ['ó'], ó: ['o'],
-  u: ['ú', 'ů'], ú: ['u'], ů: ['u'],
-  y: ['ý', 'i'], ý: ['y'],
-};
-function footballAcceptableLetters(letter) {
-  return [letter, ...(VOWEL_EQUIV[letter] || [])];
-}
-
-// Dynamické zadání pro Slovní fotbal — mění se každý tah podle posledního
-// odehraného slova.
-function currentInstructionText() {
-  if (game.mode === 'football') {
-    if (!game.requiredLetter) return 'První slovo může být jakékoliv (jen podstatné jméno).';
-    const options = footballAcceptableLetters(game.requiredLetter).map(l => `"${l}"`).join(' nebo ');
-    return `Slovo musí začínat na ${options}.`;
-  }
-  return patternInstruction(game.pattern);
-}
-
-function currentPlaceholder() {
-  if (game.mode === 'football') {
-    return game.requiredLetter
-      ? `Napiš slovo na '${game.requiredLetter}'…`
-      : 'Napiš první slovo (podstatné jméno)…';
-  }
-  return patternInputPlaceholder(game.pattern);
-}
+function currentInstructionText() { return patternInstruction(game.pattern); }
+function currentPlaceholder() { return patternInputPlaceholder(game.pattern); }
 
 function fmtTime(ms) {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -80,16 +43,15 @@ function saveNickname(n) {
   localStorage.setItem('dopisto_nickname', n);
 }
 
-const MODE_LABEL = { speed: '1 písmeno', 2: '2 písmena', football: 'Slovní fotbal', middle: 'Uprostřed' };
-const MODE_ICON = { speed: '⚡', 2: 'Aa', football: '⚽', middle: '·A·' };
-const MODE_ORDER = ['speed', 2, 'football', 'middle'];
-function isBigIcon(m) { return m === 'speed' || m === 'football'; }
+const MODE_LABEL = { speed: '1 písmeno', 2: '2 písmena', middle: 'Uprostřed' };
+const MODE_ICON = { speed: '⚡', 2: 'Aa', middle: '·A·' };
+const MODE_ORDER = ['speed', 2, 'middle'];
+function isBigIcon(m) { return m === 'speed'; }
 
 // Malý náhled zadání nad segmentovaným přepínačem, á la "[⚡P] [AA] [⚽] [·A·]".
 function modePreviewText(m) {
   if (m === 2) return '[AA]';
   if (m === 'speed') return '[⚡P]';
-  if (m === 'football') return '[⚽]';
   return '[·A·]';
 }
 
@@ -339,14 +301,6 @@ const RULES_HTML = `
       čas.</li>
     <li><b>2 písmena</b> — slovo musí začínat danou dvojicí (90 s na
       hráče).</li>
-    <li><b>Slovní fotbal</b> — jeden hráč napíše slovo a druhý musí navázat
-      slovem, které začíná posledním písmenem předchozího slova (pouze
-      podstatná jména) — hráči se střídají, dokud jednomu z nich nevyprší
-      čas. Časomíra je stejná jako u režimu 1 písmeno: 60 s hlavního času
-      (šachové hodiny) a k tomu 10 s na každý jednotlivý tah. Dlouhá a
-      krátká varianta samohlásky se počítají jako stejné písmeno (slovo
-      končící na „á" lze navázat i slovem začínajícím na „a", a naopak) a
-      totéž platí pro „y" a „i" (znějí stejně).</li>
     <li><b>Uprostřed</b> — daná dvojice písmen se ve slově může nacházet
       kdekoliv — na začátku, uprostřed i na konci (90 s na hráče).</li>
   </ol>
@@ -378,6 +332,24 @@ const RULES_HTML = `
 // ==== Stav aplikace ====
 const app = document.getElementById('app');
 let selectedMode = 2;
+function dailyBonusChipHtml(b, id) {
+  if (!b) return '';
+  return `<div class="daily-bonus-chip" ${id ? `id="${id}"` : ''} title="${b.desc}"><span class="dbc-ic">✦</span><span>Bonus dne: <b>${b.label}</b> · +1 s</span></div>`;
+}
+function showDailyBonusHit(clockId) {
+  const clockEl = document.getElementById(clockId);
+  const chip = document.getElementById('gameBonusChip');
+  if (chip) { chip.classList.remove('hit'); void chip.offsetWidth; chip.classList.add('hit'); }
+  if (clockEl) {
+    const el = document.createElement('div');
+    el.className = 'bonus-popup daily-hit';
+    el.textContent = '✦ bonus dne';
+    clockEl.appendChild(el);
+    setTimeout(() => el.remove(), 1200);
+  }
+  playGo();
+}
+
 let game = null; // aktivní kolo (zrcadlo serverového stavu)
 
 // ==== Menu ====
@@ -421,6 +393,7 @@ function renderMenu(notice) {
 
       <div class="or-sep"><span class="line"></span><span>nebo hraj sám</span><span class="line"></span></div>
 
+      <div id="menuBonus"></div>
       <div class="menu-list">
         <button class="menu-item" id="dailyBtn"><span class="ic">🔥</span><span>Denní výzva</span></button>
       </div>
@@ -514,6 +487,7 @@ function renderMenu(notice) {
   setupCodeBoxes();
 
   document.getElementById('leaderboardLinkBtn').onclick = () => renderLeaderboard(selectedMode);
+  socket.emit('get_daily_bonus', (b) => { const el = document.getElementById('menuBonus'); if (el && b) el.innerHTML = dailyBonusChipHtml(b) + `<div class="daily-bonus-desc">${b.desc}</div>`; });
   document.getElementById('dailyBtn').onclick = () => {
     const n = getNickname();
     const err = document.getElementById('err');
@@ -647,6 +621,7 @@ function startDailyChallenge() {
 function renderDailyReveal(data) {
   dailyState = {
     pattern: data.pattern,
+    dailyBonus: data.dailyBonus || null,
     myName: loadNickname(),
     timeLeft: data.timeLeft,
     usedWordsCount: 0,
@@ -658,6 +633,7 @@ function renderDailyReveal(data) {
     <div class="card">
       <div class="countdown-label">🔥 Denní výzva</div>
       ${patternTilesHtml(data.pattern, 'reveal')}
+      ${dailyBonusChipHtml(data.dailyBonus)}
       <div class="countdown-num" id="countNum">3</div>
     </div>
   `;
@@ -693,6 +669,7 @@ function renderDailyGame() {
     <div class="card">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundEnabled ? '♪' : '×'}</button>
       ${patternTilesHtml(dailyState.pattern)}
+      ${dailyBonusChipHtml(dailyState.dailyBonus, 'gameBonusChip')}
       <div class="used-count" id="usedCount">${patternInstruction(dailyState.pattern)} · Slov: 0</div>
       <div class="clocks">
         <div class="clock active" id="clockMe"><div class="name">${dailyState.myName}</div><div class="time">${fmtTime(dailyState.timeLeft)}</div></div>
@@ -703,10 +680,16 @@ function renderDailyGame() {
         <input id="wordInput" placeholder="${patternInputPlaceholder(dailyState.pattern)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" />
         <button id="sendBtn">Odeslat</button>
       </div>
+      <button id="endDailyBtn" class="secondary small" style="margin-top:10px">Ukončit pokus</button>
       <div class="feed" id="feed"></div>
     </div>
   `;
   document.getElementById('soundBtn').onclick = toggleSound;
+  document.getElementById('endDailyBtn').onclick = () => {
+    if (confirm('Opravdu ukončit pokus? Denní výzvu lze hrát jen jednou za den a výsledek se uloží.')) {
+      socket.emit('end_daily_challenge');
+    }
+  };
 
   const wordInput = document.getElementById('wordInput');
   document.getElementById('sendBtn').onclick = () => sendDailyWord();
@@ -751,11 +734,11 @@ function renderDailyResult(data, fromCache) {
 
       <div class="rules">
         <button type="button" class="rules-summary" data-panel="dailyhist"><span class="ic">▤</span><span>Tvoje slova (${data.words.length})</span><span class="chevron">›</span></button>
-        <div class="rules-panel" id="panel-dailyhist"><div class="rules-body feed" style="max-height:220px">${historyHtml}</div></div>
+        <div class="rules-panel" id="panel-dailyhist"><div class="rules-body feed word-history" style="max-height:220px">${historyHtml}</div></div>
       </div>
 
       <div class="menu-list" style="margin-top:20px">
-        <button class="menu-item" id="shareDailyBtn"><span class="ic">📤</span><span>Sdílet výsledek</span></button>
+        <button class="menu-item" id="shareDailyBtn" style="justify-content:center; text-align:center"><span class="ic">📤</span><span>Sdílet výsledek</span></button>
         <button class="secondary small" id="dailyMenuBtn" style="width:100%">Zpět do menu</button>
       </div>
     </div>
@@ -925,6 +908,7 @@ function renderRevealCountdown(data) {
     roomId: data.roomId,
     mode: data.mode,
     pattern: data.pattern,
+    dailyBonus: data.dailyBonus || null,
     youAre: data.youAre,
     myName: loadNickname(),
     opponentName: data.opponent,
@@ -935,7 +919,7 @@ function renderRevealCountdown(data) {
     turn: data.turn,
     timeLeft: data.timeLeft.slice(),
     turnTimer: data.turnTimer,
-    turnTimeCap: data.turnTimer, // pro procentuální výpočet lišty (Blitz/Fotbal)
+    turnTimeCap: data.turnTimer, // pro procentuální výpočet lišty 
     requiredLetter: data.requiredLetter || null,
     usedWordsCount: 0,
     lastWholeSecond: [999, 999],
@@ -1003,7 +987,7 @@ function slotFor(playerIdx) {
 }
 
 function renderGame() {
-  const hasTurnTimer = game.mode === 'speed' || game.mode === 'football';
+  const hasTurnTimer = game.mode === 'speed';
 
   const clocksHtml = `
     <div class="clocks">
@@ -1023,6 +1007,7 @@ function renderGame() {
     <div class="card">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundEnabled ? '♪' : '×'}</button>
       ${patternDisplayBlock(game.pattern)}
+      ${dailyBonusChipHtml(game.dailyBonus, 'gameBonusChip')}
       <div class="used-count" id="usedCount">${currentInstructionText()} · Slov: 0</div>
       ${clocksHtml}
       <div class="error" id="gameErr"></div>
@@ -1085,7 +1070,7 @@ function renderGame() {
 
 function updateClocksUI() {
   if (!game) return;
-  const hasTurnTimer = game.mode === 'speed' || game.mode === 'football';
+  const hasTurnTimer = game.mode === 'speed';
 
   const meEl = document.getElementById('clockMe');
   const oppEl = document.getElementById('clockOpp');
@@ -1159,7 +1144,7 @@ function renderResult(data) {
   playDefeat();
   setTimeout(playVictory, 650);
 
-  const timeoutLabel = game.mode === 'football' || game.mode === 'speed'
+  const timeoutLabel = game.mode === 'speed'
     ? 'nestihl(a) odpovědět včas.'
     : 'došel hlavní čas.';
 
@@ -1196,7 +1181,7 @@ function renderResult(data) {
 
       <div class="rules">
         <button type="button" class="rules-summary" data-panel="hist"><span class="ic">▤</span><span>Historie slov (${history.length})</span><span class="chevron">›</span></button>
-        <div class="rules-panel" id="panel-hist"><div class="rules-body feed" style="max-height:220px">${historyHtml}</div></div>
+        <div class="rules-panel" id="panel-hist"><div class="rules-body feed word-history" style="max-height:220px">${historyHtml}</div></div>
       </div>
 
       <div class="menu-list" style="margin-top:20px">
@@ -1301,6 +1286,7 @@ socket.on('daily_state_update', (data) => {
       lastWordBanner.classList.add('pop');
     }
 
+    if (data.dailyBonusHit) showDailyBonusHit('clockMe');
     if (data.bonusMs) {
       const clockEl = document.getElementById('clockMe');
       if (clockEl) {
@@ -1344,19 +1330,16 @@ socket.on('state_update', (data) => {
   game.timeLeft = data.timeLeft;
   game.turnTimer = data.turnTimer;
   game.usedWordsCount = data.usedWordsCount;
-  if (game.mode === 'football' && data.requiredLetter !== undefined) {
-    game.requiredLetter = data.requiredLetter;
-  }
 
   // Když se tah právě přehodil (nové slovo), aktuální turnTimer je zároveň
-  // nový "strop" pro procentuální výpočet lišty (u Fotbalu se strop zmenšuje).
+  // nový "strop" pro procentuální výpočet lišty.
   const turnJustChanged = !!data.lastWord;
-  if (turnJustChanged && (game.mode === 'speed' || game.mode === 'football') && data.turnTimer != null) {
+  if (turnJustChanged && (game.mode === 'speed') && data.turnTimer != null) {
     game.turnTimeCap = data.turnTimer;
   }
 
   const active = data.turn;
-  if ((game.mode === 'speed' || game.mode === 'football') && data.turnTimer != null) {
+  if ((game.mode === 'speed') && data.turnTimer != null) {
     const halfStep = Math.floor(data.turnTimer / 500);
     if (halfStep !== game.lastHalfStepTurn) {
       game.lastHalfStepTurn = halfStep;
@@ -1394,7 +1377,6 @@ socket.on('state_update', (data) => {
     if (usedCount) usedCount.textContent = `${currentInstructionText()} · Slov: ${data.usedWordsCount}`;
 
     const wordInputEl = document.getElementById('wordInput');
-    if (wordInputEl && game.mode === 'football') wordInputEl.placeholder = currentPlaceholder();
 
     const turnName = document.getElementById('turnName');
     if (turnName) turnName.textContent = game.turn === game.youAre ? game.myName : game.opponentName;
@@ -1408,6 +1390,7 @@ socket.on('state_update', (data) => {
       lastWordBanner.classList.add('pop');
     }
 
+    if (data.dailyBonusHit) showDailyBonusHit(`clock${slotFor(data.bonusPlayerIdx)}`);
     if (data.bonusMs) {
       showBonusPopup(data.bonusPlayerIdx, data.bonusMs);
     }
