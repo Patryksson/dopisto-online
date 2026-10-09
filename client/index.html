@@ -441,6 +441,14 @@
     100% { opacity: 0; transform: translateY(-22px) scale(1); }
   }
 
+  /* Mobil: ikony v rohu nesmí zasahovat do loga — bonus dne jde vedle ikony
+     hudby do horní lišty a karta dostane nahoře místo navíc. */
+  @media (max-width: 560px) {
+    .card:has(.bonus-badge) { padding-top: 56px; }
+    .bonus-badge { top: 12px; right: 56px; }
+    .bonus-badge-pop { top: 54px; }
+  }
+
   @media (max-width: 380px) {
     body { padding: 12px; }
     .card { padding: 18px 16px 26px; }

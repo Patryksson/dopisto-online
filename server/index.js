@@ -7,7 +7,11 @@ const { setupGame, startMatchmakingLoop } = require('./game');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, { maxHttpBufferSize: 10 * 1024 });
+const { attachConnectionLimit, securityHeaders } = require('./security');
+attachConnectionLimit(io);
+app.disable('x-powered-by');
+app.use(securityHeaders);
 
 // Gzip/brotli komprese odpovědí — na mobilní síti citelně zrychlí načtení
 // app.js/index.html (menší přenos = méně dat, méně baterie na rádiu).
@@ -29,6 +33,9 @@ app.use(express.static(path.join(__dirname, '..', 'client'), {
 }));
 
 startMatchmakingLoop(io);
+
+process.on('uncaughtException', (e) => console.error('uncaughtException:', e));
+process.on('unhandledRejection', (e) => console.error('unhandledRejection:', e));
 
 io.on('connection', (socket) => {
   setupGame(io, socket);

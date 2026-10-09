@@ -28,6 +28,10 @@ function patternInputPlaceholder(pattern) {
 function currentInstructionText() { return patternInstruction(game.pattern); }
 function currentPlaceholder() { return patternInputPlaceholder(game.pattern); }
 
+function esc(v) {
+  return String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function fmtTime(ms) {
   const s = Math.max(0, Math.ceil(ms / 1000));
   const m = Math.floor(s / 60);
@@ -589,7 +593,7 @@ function loadLeaderboardBody(mode) {
       <table style="width:100%; border-collapse:collapse; margin-top:6px">
         <thead><tr><th style="text-align:left">#</th><th style="text-align:left">Hráč</th><th style="text-align:left">ELO</th><th style="text-align:left">V/P</th></tr></thead>
         <tbody>
-          ${list.map((p, i) => `<tr><td>${i + 1}</td><td>${p.name}</td><td>${p.elo}</td><td>${p.wins}/${p.losses}</td></tr>`).join('')}
+          ${list.map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.name)}</td><td>${p.elo}</td><td>${p.wins}/${p.losses}</td></tr>`).join('')}
         </tbody>
       </table>` : '<div style="color:var(--muted); text-align:center; padding:20px 0">Zatím nikdo v tomto režimu nehrál (max. 100 nejlepších).</div>';
     body.style.opacity = '1';
@@ -739,7 +743,7 @@ function renderDailyGame() {
       ${dailyBonusChipHtml(dailyState.dailyBonus, 'gameBonusChip')}
       <div class="used-count" id="usedCount">${patternInstruction(dailyState.pattern)} · Slov: 0</div>
       <div class="clocks">
-        <div class="clock active" id="clockMe"><div class="name">${dailyState.myName}</div><div class="time">${fmtTime(dailyState.timeLeft)}</div></div>
+        <div class="clock active" id="clockMe"><div class="name">${esc(dailyState.myName)}</div><div class="time">${fmtTime(dailyState.timeLeft)}</div></div>
       </div>
       <div class="error" id="gameErr"></div>
       <div class="last-word" id="lastWordBanner"></div>
@@ -1009,12 +1013,12 @@ function renderRevealCountdown(data) {
     <div class="card">
       <div class="vs-row">
         <div class="vs-side">
-          <div class="vs-name">${game.myName}</div>
+          <div class="vs-name">${esc(game.myName)}</div>
           <div class="vs-elo">${data.yourElo} ELO</div>
         </div>
         <div class="vs-sep">VS</div>
         <div class="vs-side">
-          <div class="vs-name">${data.opponent}</div>
+          <div class="vs-name">${esc(data.opponent)}</div>
           <div class="vs-elo">${data.opponentElo} ELO</div>
         </div>
       </div>
@@ -1067,8 +1071,8 @@ function renderGame() {
 
   const clocksHtml = `
     <div class="clocks">
-      <div class="clock" id="clockMe"><div class="name">${game.myName}</div><div class="time">${fmtTime(game.timeLeft[game.youAre])}</div></div>
-      <div class="clock" id="clockOpp"><div class="name">${game.opponentName}</div><div class="time">${fmtTime(game.timeLeft[1 - game.youAre])}</div></div>
+      <div class="clock" id="clockMe"><div class="name">${esc(game.myName)}</div><div class="time">${fmtTime(game.timeLeft[game.youAre])}</div></div>
+      <div class="clock" id="clockOpp"><div class="name">${esc(game.opponentName)}</div><div class="time">${fmtTime(game.timeLeft[1 - game.youAre])}</div></div>
     </div>
   `;
 
@@ -1088,7 +1092,7 @@ function renderGame() {
       ${clocksHtml}
       <div class="error" id="gameErr"></div>
       ${turnTimerHtml}
-      <div class="turn-banner">Na tahu: <span id="turnName">${game.turn === game.youAre ? game.myName : game.opponentName}</span></div>
+      <div class="turn-banner">Na tahu: <span id="turnName">${esc(game.turn === game.youAre ? game.myName : game.opponentName)}</span></div>
       <div class="last-word" id="lastWordBanner"></div>
       <div class="word-input">
         <input id="wordInput" placeholder="${currentPlaceholder()}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" />
@@ -1226,9 +1230,9 @@ function renderResult(data) {
 
   let reasonText;
   if (iWon) {
-    if (data.reason === 'timeout' || data.reason === 'turn_timeout') reasonText = `${opp.name} ${timeoutLabel}`;
-    else if (data.reason === 'opponent_left') reasonText = `${opp.name} odešel(la) ze hry.`;
-    else reasonText = `${opp.name} se vzdal(a).`;
+    if (data.reason === 'timeout' || data.reason === 'turn_timeout') reasonText = `${esc(opp.name)} ${timeoutLabel}`;
+    else if (data.reason === 'opponent_left') reasonText = `${esc(opp.name)} odešel(la) ze hry.`;
+    else reasonText = `${esc(opp.name)} se vzdal(a).`;
   } else {
     if (data.reason === 'timeout' || data.reason === 'turn_timeout') reasonText = 'Nestihl(a) jsi odpovědět včas.';
     else reasonText = 'Vzdal(a) jsi kolo.';
@@ -1246,11 +1250,11 @@ function renderResult(data) {
       <div style="color:var(--muted); font-size:13px">${reasonText} <span>(režim: ${MODE_LABEL[game.mode]})</span></div>
       <div class="row" style="margin-top:16px">
         <div>
-          <div style="color:var(--muted); font-size:12px; letter-spacing:1px; text-transform:uppercase">${my.name}</div>
+          <div style="color:var(--muted); font-size:12px; letter-spacing:1px; text-transform:uppercase">${esc(my.name)}</div>
           <div class="elo-line ${iWon ? 'win' : 'lose'}">${my.before} → ${my.after} (${my.after >= my.before ? '+' : ''}${my.after - my.before})</div>
         </div>
         <div>
-          <div style="color:var(--muted); font-size:12px; letter-spacing:1px; text-transform:uppercase">${opp.name}</div>
+          <div style="color:var(--muted); font-size:12px; letter-spacing:1px; text-transform:uppercase">${esc(opp.name)}</div>
           <div class="elo-line ${iWon ? 'lose' : 'win'}">${opp.before} → ${opp.after} (${opp.after >= opp.before ? '+' : ''}${opp.after - opp.before})</div>
         </div>
       </div>
@@ -1391,6 +1395,16 @@ socket.on('daily_word_rejected', ({ reason, penaltyMs }) => {
   } else if (gameErr) {
     gameErr.textContent = reason;
   }
+});
+
+socket.on('nickname_rejected', ({ message }) => {
+  dailyState = null;
+  renderMenu(message || 'Přezdívka není povolená.');
+});
+
+socket.on('rate_limited', () => {
+  const err = document.getElementById('err') || document.getElementById('gameErr');
+  if (err) err.textContent = 'Příliš rychle — chvilku počkej.';
 });
 
 socket.on('daily_over', (data) => {

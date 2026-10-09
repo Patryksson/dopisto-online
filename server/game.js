@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { isValidWord, generatePattern, matchesPattern, patternInstruction, acceptableStartLetters, matchesRequiredLetter, dailyPattern } = require('./dictionary');
 const store = require('./store');
+const { sanitizeNickname, cleanWord, attachSocketGuard } = require('./security');
 const { dailyBonusForDate, checkDailyBonus, publicBonus, DAILY_BONUS_EXTRA_MS } = require('./dailyBonus');
 
 const MODES = [2, 'middle', 'speed'];
@@ -89,10 +90,20 @@ function startMatchmakingLoop(io) {
 function setupGame(io, socket) {
   socket.data.nickname = null;
   socket.data.lobbyCode = null;
+  attachSocketGuard(socket);
+
+  // Vyčistí přezdívku; při zamítnutí pošle klientovi důvod a vrátí null.
+  function acceptNickname(raw) {
+    const r = sanitizeNickname(raw);
+    if (!r.ok) { socket.emit('nickname_rejected', { message: r.message }); return null; }
+    return r.nick;
+  }
 
   socket.on('find_match', ({ nickname, mode }) => {
-    if (!nickname || !MODES.includes(mode)) return;
-    socket.data.nickname = String(nickname).slice(0, 20);
+    if (!MODES.includes(mode)) return;
+    const nick = acceptNickname(nickname);
+    if (!nick) return;
+    socket.data.nickname = nick;
     removeFromQueues(socket);
 
     const elo = store.getProfile(mode, socket.data.nickname).elo;
@@ -106,8 +117,10 @@ function setupGame(io, socket) {
   });
 
   socket.on('create_lobby', ({ nickname, mode }) => {
-    if (!nickname || !MODES.includes(mode)) return;
-    socket.data.nickname = String(nickname).slice(0, 20);
+    if (!MODES.includes(mode)) return;
+    const nick = acceptNickname(nickname);
+    if (!nick) return;
+    socket.data.nickname = nick;
     removeLobbyFor(socket);
 
     const elo = store.getProfile(mode, socket.data.nickname).elo;
@@ -126,8 +139,10 @@ function setupGame(io, socket) {
   socket.on('cancel_lobby', () => removeLobbyFor(socket));
 
   socket.on('join_lobby', ({ nickname, code }) => {
-    if (!nickname || !code) return;
-    const cleanCode = String(code).trim().toUpperCase();
+    if (!code) return;
+    const nick = acceptNickname(nickname);
+    if (!nick) return;
+    const cleanCode = String(code).trim().toUpperCase().slice(0, 10);
     const entry = lobbies.get(cleanCode);
     if (!entry) {
       socket.emit('lobby_error', { message: 'Kód nenalezen nebo vypršel.' });
@@ -137,7 +152,7 @@ function setupGame(io, socket) {
       socket.emit('lobby_error', { message: 'Nemůžeš se připojit sám k sobě.' });
       return;
     }
-    socket.data.nickname = String(nickname).slice(0, 20);
+    socket.data.nickname = nick;
     const joinerElo = store.getProfile(entry.mode, socket.data.nickname).elo;
     clearTimeout(entry.timeout);
     lobbies.delete(cleanCode);
@@ -155,7 +170,7 @@ function setupGame(io, socket) {
     const idx = room.players.findIndex(p => p.socket.id === socket.id);
     if (idx === -1 || room.turn !== idx) return;
 
-    const clean = (word || '').trim().toLowerCase();
+    const clean = cleanWord(word);
     if (!clean) return;
 
     if (!matchesPattern(clean, room.pattern)) {
@@ -218,6 +233,7 @@ function setupGame(io, socket) {
   });
 
   socket.on('get_leaderboard', ({ mode }, cb) => {
+    if (!MODES.includes(mode)) return;
     if (typeof cb === 'function') cb(store.leaderboard(mode, 100));
   });
 
@@ -227,7 +243,9 @@ function setupGame(io, socket) {
   socket.on('get_daily_bonus', (cb) => { if (typeof cb === 'function') cb(publicBonus(dailyBonusForDate())); });
 
   socket.on('start_daily_challenge', (payload) => {
-    socket.data.dailyNick = String((payload && payload.nickname) || '').trim().slice(0, 20);
+    const r = sanitizeNickname(payload && payload.nickname);
+    if (!r.ok) { socket.emit('nickname_rejected', { message: r.message }); return; }
+    socket.data.dailyNick = r.nick;
     const existing = dailySessions.get(socket.id);
     if (existing) {
       clearInterval(existing.intervalId);
@@ -267,7 +285,7 @@ function setupGame(io, socket) {
     const session = dailySessions.get(socket.id);
     if (!session || session.finished) return;
 
-    const clean = (word || '').trim().toLowerCase();
+    const clean = cleanWord(word);
     if (!clean) return;
 
     if (!matchesPattern(clean, session.pattern)) {
