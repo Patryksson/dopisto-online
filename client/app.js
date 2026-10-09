@@ -655,7 +655,7 @@ function loadDailyLeaderboard(elId) {
     const el = document.getElementById(elId);
     if (!el) return;
     if (!rows || !rows.length) { el.innerHTML = '<div style="color:var(--muted); font-size:13px">Zatím nikdo nehrál.</div>'; return; }
-    const me = (getNickname() || '').trim().toLowerCase();
+    const me = (loadNickname() || '').trim().toLowerCase();
     el.innerHTML = rows.map((r, i) => {
       const safe = String(r.name).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
       return `<div class="dl-row${r.name.trim().toLowerCase() === me ? ' me' : ''}"><span class="dl-pos">${i + 1}.</span><span class="dl-name">${safe}</span><span class="dl-score">${r.count}</span></div>`;
@@ -671,7 +671,7 @@ function startDailyChallenge() {
     renderDailyResult(saved, true);
     return;
   }
-  socket.emit('start_daily_challenge', { nickname: getNickname() });
+  socket.emit('start_daily_challenge', { nickname: loadNickname() });
   app.innerHTML = `
     <div class="card" style="text-align:center">
       <div class="spinner"></div>
