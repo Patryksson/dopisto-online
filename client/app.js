@@ -112,6 +112,20 @@ function bindModeSegmented(getMode, onModeChange) {
 
 // ==== Zvuk (Web Audio API — žádné externí soubory) ====
 let audioCtx = null;
+// Nastavení zvuku po kategoriích + vibrace (uloženo v prohlížeči).
+const SOUND_PREF_LABELS = {
+  ticks: 'Tikání hodin', clicks: 'Kliknutí', words: 'Slova a předání tahu',
+  penalty: 'Penalizace', results: 'Výhra / prohra', vibrate: 'Vibrace (mobil)',
+};
+let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true };
+try { Object.assign(soundPrefs, JSON.parse(localStorage.getItem('dopisto_sound_prefs') || '{}')); } catch {}
+function saveSoundPrefs() { try { localStorage.setItem('dopisto_sound_prefs', JSON.stringify(soundPrefs)); } catch {} }
+function soundOn(cat) { return soundEnabled && soundPrefs[cat] !== false; }
+function vibrate(pattern) {
+  if (soundPrefs.vibrate === false || !navigator.vibrate) return;
+  try { navigator.vibrate(pattern); } catch {}
+}
+
 let soundEnabled = localStorage.getItem('word_duel_sound') !== 'off';
 
 function ensureAudioCtx() {
@@ -121,7 +135,7 @@ function ensureAudioCtx() {
 }
 
 function playTick() {
-  if (!soundEnabled) return;
+  if (!soundOn('ticks')) return;
   const ctx = ensureAudioCtx();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -135,7 +149,7 @@ function playTick() {
 }
 
 function playTickUrgent() {
-  if (!soundEnabled) return;
+  if (!soundOn('ticks')) return;
   const ctx = ensureAudioCtx();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -149,7 +163,7 @@ function playTickUrgent() {
 }
 
 function playPenalty() {
-  if (!soundEnabled) return;
+  if (!soundOn('penalty')) return;
   const ctx = ensureAudioCtx();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -164,7 +178,7 @@ function playPenalty() {
 }
 
 function playVictory() {
-  if (!soundEnabled) return;
+  if (!soundOn('results')) return;
   const ctx = ensureAudioCtx();
   const now = ctx.currentTime;
   const notes = [523.25, 659.25, 783.99, 1046.5];
@@ -184,7 +198,7 @@ function playVictory() {
 }
 
 function playDefeat() {
-  if (!soundEnabled) return;
+  if (!soundOn('results')) return;
   const ctx = ensureAudioCtx();
   const now = ctx.currentTime;
   const notes = [392.0, 349.23, 293.66];
@@ -204,7 +218,7 @@ function playDefeat() {
 }
 
 function playGo() {
-  if (!soundEnabled) return;
+  if (!soundOn('words')) return;
   const ctx = ensureAudioCtx();
   const now = ctx.currentTime;
   [880, 1174.66].forEach((freq, i) => {
@@ -223,7 +237,7 @@ function playGo() {
 }
 
 function playSwoosh() {
-  if (!soundEnabled) return;
+  if (!soundOn('words')) return;
   const ctx = ensureAudioCtx();
   const duration = 0.28;
   const bufferSize = Math.floor(ctx.sampleRate * duration);
@@ -267,7 +281,7 @@ function playSwoosh() {
 
 // Klik má lehce proměnlivou výšku tónu (±5 %), ať nezní pokaždé identicky.
 function playClick() {
-  if (!soundEnabled) return;
+  if (!soundOn('clicks')) return;
   const ctx = ensureAudioCtx();
   const pitchMul = 0.95 + Math.random() * 0.1;
   const osc = ctx.createOscillator();
@@ -357,52 +371,94 @@ function showDailyBonusHit(clockId) {
 let game = null; // aktivní kolo (zrcadlo serverového stavu)
 
 // ==== Menu ====
+// Přezdívka: při prvním spuštění vstupní pole, potom jen řádek "Hraješ jako …".
+function nicknameBlockHtml() {
+  const n = loadNickname();
+  if (!n) {
+    return `
+      <div class="nick-intro">Jak ti máme říkat?</div>
+      <div class="nickname-box">
+        <svg class="nickname-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.5-7 8-7s8 3 8 7"></path></svg>
+        <input id="nickname" placeholder="Tvoje přezdívka" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="20" />
+      </div>`;
+  }
+  return `<div class="player-line" id="playerLine">👤 Hraješ jako <b>${esc(n)}</b> <button type="button" class="link-btn" id="changeNickBtn">změnit</button></div>`;
+}
+
+// Aktuální přezdívka — z vstupního pole, pokud je zrovna vidět, jinak uložená.
+function currentNick() {
+  const input = document.getElementById('nickname');
+  return (input ? input.value : loadNickname()).trim();
+}
+
+function bindNicknameBlock() {
+  const btn = document.getElementById('changeNickBtn');
+  if (!btn) return;
+  btn.onclick = () => {
+    const line = document.getElementById('playerLine');
+    line.outerHTML = `
+      <div class="nickname-box" id="nickEdit">
+        <svg class="nickname-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.5-7 8-7s8 3 8 7"></path></svg>
+        <input id="nickname" placeholder="Tvoje přezdívka" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="20" value="${esc(loadNickname())}" />
+      </div>`;
+    const input = document.getElementById('nickname');
+    input.focus(); input.select();
+  };
+}
+
+// Ověří přezdívku; vrátí ji, nebo zobrazí chybu a vrátí ''.
+function requireNick() {
+  const n = currentNick();
+  const err = document.getElementById('err');
+  if (!n) { if (err) err.textContent = 'Zadej přezdívku.'; return ''; }
+  if (n.length < 2) { if (err) err.textContent = 'Přezdívka musí mít aspoň 2 znaky.'; return ''; }
+  saveNickname(n);
+  return n;
+}
+
+function msUntilUtcMidnight() {
+  const d = new Date();
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - d.getTime();
+}
+function fmtCountdown(ms) {
+  const m = Math.floor(ms / 60000);
+  return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+}
+
+let menuTimer = null;
+
+function settingsHtml() {
+  return Object.keys(SOUND_PREF_LABELS).map(k => `
+    <label class="setting-row"><span>${SOUND_PREF_LABELS[k]}</span>
+      <input type="checkbox" data-pref="${k}" ${soundPrefs[k] !== false ? 'checked' : ''} />
+    </label>`).join('') + '<div class="setting-note">Hlavní zapnutí/vypnutí zvuku je ikona ♪ vpravo nahoře.</div>';
+}
+
 function renderMenu(notice) {
-  const nickname = loadNickname();
+  clearInterval(menuTimer);
+  const saved = getSavedDailyResult();
 
   app.innerHTML = `
     <div class="page">
     <div class="card">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundEnabled ? '♪' : '×'}</button>
-      <button type="button" class="bonus-badge" id="menuBonusBadge" hidden></button>
-      <div class="bonus-badge-pop" id="menuBonusPop" hidden></div>
       <img class="logo" src="logo.png" alt="Dopišto" />
       <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
 
-      <div class="mode-select">
-        ${modeSegmentedHtml(selectedMode)}
-      </div>
-
-      <div class="nickname-box">
-        <svg class="nickname-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.5-7 8-7s8 3 8 7"></path></svg>
-        <input id="nickname" placeholder="Tvoje přezdívka" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="20" value="${nickname.replace(/"/g, '')}" />
-      </div>
+      ${nicknameBlockHtml()}
       <div class="error" id="err">${notice || ''}</div>
 
-      <div class="or-sep"><span class="line"></span><span>hrát proti náhodnému hráči</span><span class="line"></span></div>
-
       <div class="menu-list">
-        <button class="menu-item" id="findBtn"><span class="ic">🔎</span><span>Najít soupeře</span></button>
+        <button class="menu-item" id="playBtn"><span class="ic">⚔</span><span>Hrát</span></button>
       </div>
 
-      <div class="or-sep"><span class="line"></span><span>nebo hraj jen s kamarádem</span><span class="line"></span></div>
-
-      <div class="menu-list">
-        <button class="menu-item" id="createLobbyBtn"><span class="ic">＋</span><span>Vytvořit lobby</span></button>
+      <div class="daily-card">
+        <div class="dc-head"><span class="dc-title">🔥 Denní výzva</span><span class="dc-timer" id="dcTimer"></span></div>
+        <div class="dc-pattern" id="dcPattern">···</div>
+        <div class="dc-bonus" id="dcBonus"></div>
+        <div class="menu-list"><button class="menu-item" id="dailyBtn"><span>${saved ? `Zobrazit výsledek · ${saved.wordCount} slov` : 'Hrát výzvu'}</span></button></div>
+        ${streakHtml()}
       </div>
-      <div class="lobby-row">
-        <div class="code-boxes" id="joinCodeBoxes">
-          ${[0, 1, 2, 3, 4].map(i => `<input class="code-box" data-idx="${i}" maxlength="1" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" inputmode="text" />`).join('')}
-        </div>
-        <button id="joinLobbyBtn">Připojit</button>
-      </div>
-
-      <div class="or-sep"><span class="line"></span><span>nebo hraj sám</span><span class="line"></span></div>
-
-      <div class="menu-list">
-        <button class="menu-item" id="dailyBtn"><span class="ic">🔥</span><span>Denní výzva</span></button>
-      </div>
-      ${streakHtml()}
 
       <div class="rules">
         <button type="button" class="rules-summary" data-panel="p1"><span class="ic">ⓘ</span><span>Jak to funguje</span><span class="chevron">›</span></button>
@@ -416,6 +472,11 @@ function renderMenu(notice) {
 
       <div class="rules">
         <button type="button" class="rules-summary" id="leaderboardLinkBtn"><span class="ic">★</span><span>Žebříček</span><span class="chevron">›</span></button>
+      </div>
+
+      <div class="rules">
+        <button type="button" class="rules-summary" data-panel="p3"><span class="ic">⚙</span><span>Nastavení zvuku</span><span class="chevron">›</span></button>
+        <div class="rules-panel" id="panel-p3"><div class="rules-body" id="settingsBody">${settingsHtml()}</div></div>
       </div>
     </div>
 
@@ -437,78 +498,41 @@ function renderMenu(notice) {
   `;
 
   document.getElementById('soundBtn').onclick = toggleSound;
-  bindModeSegmented(() => selectedMode, (newMode) => { selectedMode = newMode; });
-
-  document.querySelectorAll('.rules-summary').forEach(btn => {
-    btn.onclick = () => {
-      const panel = document.getElementById('panel-' + btn.dataset.panel);
-      const isOpen = btn.classList.contains('open');
-      if (isOpen) {
-        panel.style.maxHeight = '0px';
-        btn.classList.remove('open');
-      } else {
-        panel.style.maxHeight = panel.scrollHeight + 'px';
-        btn.classList.add('open');
+  bindNicknameBinding();
+  bindRulesPanels();
+  document.querySelectorAll('#settingsBody input[data-pref]').forEach(cb => {
+    cb.onchange = () => {
+      soundPrefs[cb.dataset.pref] = cb.checked;
+      saveSoundPrefs();
+      if (cb.checked) {
+        ensureAudioCtx();
+        ({ ticks: playTick, clicks: playClick, words: playSwoosh, penalty: playPenalty, results: playVictory }[cb.dataset.pref] || (() => {}))();
+        if (cb.dataset.pref === 'vibrate') vibrate(40);
       }
     };
   });
-
-  function getNickname() {
-    const n = document.getElementById('nickname').value.trim();
-    return n;
-  }
-
-  document.getElementById('findBtn').onclick = () => {
-    const n = getNickname();
-    const err = document.getElementById('err');
-    if (!n) { err.textContent = 'Zadej přezdívku.'; return; }
-    saveNickname(n);
-    ensureAudioCtx();
-    socket.emit('find_match', { nickname: n, mode: selectedMode });
-    renderSearching(n);
-  };
-
-  document.getElementById('createLobbyBtn').onclick = () => {
-    const n = getNickname();
-    const err = document.getElementById('err');
-    if (!n) { err.textContent = 'Zadej přezdívku.'; return; }
-    saveNickname(n);
-    ensureAudioCtx();
-    socket.emit('create_lobby', { nickname: n, mode: selectedMode });
-    renderLobbyWaiting();
-  };
-
-  document.getElementById('joinLobbyBtn').onclick = () => {
-    const n = getNickname();
-    const code = getJoinCode();
-    const err = document.getElementById('err');
-    if (!n) { err.textContent = 'Zadej přezdívku.'; return; }
-    if (code.length < 5) { err.textContent = 'Zadej celý kód lobby.'; return; }
-    saveNickname(n);
-    ensureAudioCtx();
-    socket.emit('join_lobby', { nickname: n, code });
-    renderJoining();
-  };
-
-  setupCodeBoxes();
-
   document.getElementById('leaderboardLinkBtn').onclick = () => renderLeaderboard(selectedMode);
-  socket.emit('get_daily_bonus', (b) => {
-    const badge = document.getElementById('menuBonusBadge');
-    const pop = document.getElementById('menuBonusPop');
-    if (!badge || !pop || !b) return;
-    badge.innerHTML = '<span class="dbc-ic">✦</span>';
-    badge.setAttribute('aria-label', 'Bonus dne: ' + b.label);
-    pop.innerHTML = `<b>Bonus dne: ${b.label} · +3 s</b><br>${b.desc}`;
-    badge.hidden = false;
-    badge.onclick = () => { pop.hidden = !pop.hidden; };
-    document.addEventListener('click', (e) => { if (!badge.contains(e.target)) pop.hidden = true; });
+  document.getElementById('playBtn').onclick = () => {
+    if (!requireNick()) return;
+    ensureAudioCtx();
+    renderPlayMenu();
+  };
+
+  // Karta denní výzvy: dnešní zadání, bonus dne a odpočet do půlnoci (UTC).
+  const tick = () => { const t = document.getElementById('dcTimer'); if (t) t.textContent = 'zbývá ' + fmtCountdown(msUntilUtcMidnight()); };
+  tick();
+  menuTimer = setInterval(tick, 30000);
+  socket.emit('get_daily_info', (info) => {
+    const pat = document.getElementById('dcPattern');
+    const bon = document.getElementById('dcBonus');
+    if (!info || !pat || !bon) return;
+    pat.textContent = info.pattern.value.toUpperCase() + '···';
+    bon.innerHTML = `<span class="dbc-ic">✦</span> Bonus dne: <b>${esc(info.bonus.label)}</b> · +3 s<div class="daily-bonus-desc">${esc(info.bonus.desc)}</div>`;
   });
+
   document.getElementById('dailyBtn').onclick = () => {
-    const n = getNickname();
+    if (!requireNick()) return;
     const err = document.getElementById('err');
-    if (!n) { err.textContent = 'Zadej přezdívku.'; return; }
-    saveNickname(n);
     try {
       ensureAudioCtx();
       startDailyChallenge();
@@ -517,6 +541,88 @@ function renderMenu(notice) {
       err.textContent = 'Denní výzvu se nepodařilo spustit: ' + (e && e.message ? e.message : e);
     }
   };
+}
+
+function bindNicknameBinding() { bindNicknameBlock(); }
+
+// Rozbalovací panely pravidel (společné pro menu).
+function bindRulesPanels() {
+  document.querySelectorAll('.rules-summary[data-panel]').forEach(btn => {
+    btn.onclick = () => {
+      const panel = document.getElementById('panel-' + btn.dataset.panel);
+      const isOpen = btn.classList.contains('open');
+      if (isOpen) { panel.style.maxHeight = '0px'; btn.classList.remove('open'); }
+      else { panel.style.maxHeight = panel.scrollHeight + 'px'; btn.classList.add('open'); }
+    };
+  });
+}
+
+// Druhá úroveň: výběr režimu, hledání soupeře, lobby.
+function renderPlayMenu(notice) {
+  clearInterval(menuTimer);
+  app.innerHTML = `
+    <div class="page">
+    <div class="card">
+      <button class="icon-btn sound-toggle" id="soundBtn">${soundEnabled ? '♪' : '×'}</button>
+      <button type="button" class="back-link" id="playBackBtn">‹ Zpět</button>
+      <h1 class="play-title">Hrát</h1>
+      <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
+
+      <div class="mode-select">
+        ${modeSegmentedHtml(selectedMode)}
+      </div>
+      <div class="error" id="err">${notice || ''}</div>
+
+      <div class="or-sep"><span class="line"></span><span>hrát proti náhodnému hráči</span><span class="line"></span></div>
+
+      <div class="menu-list">
+        <button class="menu-item" id="findBtn"><span class="ic">🔎</span><span>Najít soupeře</span></button>
+      </div>
+
+      <div class="or-sep"><span class="line"></span><span>nebo hraj jen s kamarádem</span><span class="line"></span></div>
+
+      <div class="menu-list">
+        <button class="menu-item" id="createLobbyBtn"><span class="ic">＋</span><span>Vytvořit lobby</span></button>
+      </div>
+      <div class="lobby-row">
+        <div class="code-boxes" id="joinCodeBoxes">
+          ${[0, 1, 2, 3, 4].map(i => `<input class="code-box" data-idx="${i}" maxlength="1" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" inputmode="text" />`).join('')}
+        </div>
+        <button id="joinLobbyBtn">Připojit</button>
+      </div>
+    </div>
+    </div>
+  `;
+
+  document.getElementById('soundBtn').onclick = toggleSound;
+  document.getElementById('playBackBtn').onclick = () => renderMenu();
+  bindModeSegmented(() => selectedMode, (newMode) => { selectedMode = newMode; });
+
+  document.getElementById('findBtn').onclick = () => {
+    const n = requireNick(); if (!n) return;
+    ensureAudioCtx();
+    socket.emit('find_match', { nickname: n, mode: selectedMode });
+    renderSearching(n);
+  };
+
+  document.getElementById('createLobbyBtn').onclick = () => {
+    const n = requireNick(); if (!n) return;
+    ensureAudioCtx();
+    socket.emit('create_lobby', { nickname: n, mode: selectedMode });
+    renderLobbyWaiting();
+  };
+
+  document.getElementById('joinLobbyBtn').onclick = () => {
+    const err = document.getElementById('err');
+    const n = requireNick(); if (!n) return;
+    const code = getJoinCode();
+    if (code.length < 5) { err.textContent = 'Zadej celý kód lobby.'; return; }
+    ensureAudioCtx();
+    socket.emit('join_lobby', { nickname: n, code });
+    renderJoining();
+  };
+
+  setupCodeBoxes();
 }
 
 // Pět samostatných políček pro kód lobby — auto-přeskakování na další/
@@ -745,13 +851,9 @@ function renderDailyGame() {
       <div class="clocks">
         <div class="clock active" id="clockMe"><div class="name">${esc(dailyState.myName)}</div><div class="time">${fmtTime(dailyState.timeLeft)}</div></div>
       </div>
-      <div class="error" id="gameErr"></div>
       <div class="last-word" id="lastWordBanner"></div>
-      <div class="word-input">
-        <input id="wordInput" placeholder="${patternInputPlaceholder(dailyState.pattern)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" />
-        <button id="sendBtn">Odeslat</button>
-      </div>
-      <button id="endDailyBtn" class="secondary small" style="margin-top:10px">Ukončit pokus</button>
+      ${wordInputHtml(patternInputPlaceholder(dailyState.pattern))}
+      <button id="endDailyBtn" class="link-btn giveup-link" style="display:block;margin:12px auto 0">Ukončit pokus</button>
       <div class="feed" id="feed"></div>
     </div>
   `;
@@ -765,6 +867,7 @@ function renderDailyGame() {
   const wordInput = document.getElementById('wordInput');
   document.getElementById('sendBtn').onclick = () => sendDailyWord();
   wordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendDailyWord(); });
+  bindWordInputExtras(wordInput);
   wordInput.addEventListener('focus', () => {
     setTimeout(() => {
       const banner = document.getElementById('lastWordBanner');
@@ -778,6 +881,7 @@ function renderDailyGame() {
     if (!word) return;
     wordInput.value = '';
     socket.emit('submit_daily_word', { word });
+    wordInput.focus();
   }
 }
 
@@ -840,12 +944,26 @@ function renderDailyResult(data, fromCache) {
 // Vykreslí výsledek na plátno a nabídne sdílení (Web Share API na mobilu)
 // nebo stažení obrázku (na PC).
 function generateDailyShareImage(data) {
+  const MAX_WORDS = 90;          // víc slov se na obrázek nevejde rozumně
+  const WORD_FONT = '15px Arial, sans-serif';
+  const LINE_H = 24;
+  const words = (data.words || []).slice(0, MAX_WORDS);
+  const extra = Math.max(0, (data.words || []).length - words.length);
+
+  // Nejdřív změř, kolik řádků slova zaberou, ať má obrázek správnou výšku.
+  const probe = document.createElement('canvas').getContext('2d');
+  probe.font = WORD_FONT;
+  const lines = layoutWordLines(probe, words.map(w => w.toUpperCase()), 480);
+  if (extra) lines.push(`+ ${extra} dalších`);
+  const wordsTop = 520;
+  const height = Math.max(760, wordsTop + (lines.length || 1) * LINE_H + 90);
+
   const canvas = document.createElement('canvas');
-  canvas.width = 600; canvas.height = 760;
+  canvas.width = 600; canvas.height = height;
   const ctx = canvas.getContext('2d');
 
   ctx.fillStyle = '#0a0a0a';
-  ctx.fillRect(0, 0, 600, 760);
+  ctx.fillRect(0, 0, 600, height);
   ctx.fillStyle = '#ff3131';
   ctx.fillRect(0, 0, 600, 12);
 
@@ -874,16 +992,36 @@ function generateDailyShareImage(data) {
   ctx.font = '700 22px Arial, sans-serif';
   ctx.fillText('SLOV ZA 180 SEKUND', 300, 430);
 
-  ctx.fillStyle = '#8890a6';
-  ctx.font = '15px Arial, sans-serif';
-  const sample = data.words.slice(0, 14).join(' · ') || '—';
-  wrapCanvasText(ctx, sample, 300, 490, 500, 22);
+  // oddělovací čára + nadpis seznamu slov
+  ctx.fillStyle = '#2a2a2a';
+  ctx.fillRect(60, 458, 480, 1);
+  ctx.fillStyle = '#ff3131';
+  ctx.font = '700 13px Arial, sans-serif';
+  ctx.fillText('MÁ SLOVA', 300, 488);
+
+  ctx.fillStyle = '#c9ccd6';
+  ctx.font = WORD_FONT;
+  if (!lines.length) ctx.fillText('—', 300, wordsTop);
+  lines.forEach((line, i) => ctx.fillText(line, 300, wordsTop + i * LINE_H));
 
   ctx.fillStyle = '#5a5a5a';
   ctx.font = '13px Arial, sans-serif';
-  ctx.fillText('dopisto.online', 300, 730);
+  ctx.fillText('dopisto.online', 300, height - 30);
 
   return canvas;
+}
+
+// Rozdělí slova do řádků (oddělených „ · “) tak, aby se vešly do maxWidth.
+function layoutWordLines(ctx, words, maxWidth) {
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    const test = line ? `${line} · ${w}` : w;
+    if (line && ctx.measureText(test).width > maxWidth) { lines.push(line); line = w; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
 }
 
 function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
@@ -1066,6 +1204,51 @@ function slotFor(playerIdx) {
   return playerIdx === game.youAre ? 'Me' : 'Opp';
 }
 
+// Společný vstup pro slovo (zápas i denní výzva): pole, Smazat, Odeslat a
+// hláška/zpětná vazba pod ním.
+function wordInputHtml(placeholder) {
+  return `
+    <div class="word-input" id="wordInputRow">
+      <div class="wi-field">
+        <input id="wordInput" placeholder="${placeholder}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" />
+        <button type="button" class="wi-clear" id="clearBtn" aria-label="Smazat" hidden>⌫</button>
+      </div>
+      <button id="sendBtn">Odeslat</button>
+    </div>
+    <div class="error input-hint" id="gameErr"></div>`;
+}
+
+// Tlačítka nesmí vzít poli fokus (jinak se na mobilu zavře klávesnice).
+function bindWordInputExtras(wordInput) {
+  const keepFocus = (el) => { if (el) el.addEventListener('pointerdown', e => e.preventDefault()); };
+  const clearBtn = document.getElementById('clearBtn');
+  keepFocus(clearBtn); keepFocus(document.getElementById('sendBtn'));
+  const sync = () => { if (clearBtn) clearBtn.hidden = !wordInput.value; };
+  wordInput.addEventListener('input', sync);
+  if (clearBtn) clearBtn.onclick = () => { wordInput.value = ''; sync(); wordInput.focus(); playClick(); };
+  wordInput.addEventListener('input', () => {
+    const hint = document.getElementById('gameErr');
+    if (hint) hint.textContent = '';
+  });
+}
+
+// Zpětná vazba u pole: 'ok' = zelené probliknutí, 'bad' = zatřesení + důvod.
+let inputHintTimer = null;
+function inputFeedback(kind, text) {
+  const row = document.getElementById('wordInputRow');
+  const hint = document.getElementById('gameErr');
+  if (row) {
+    row.classList.remove('fb-ok', 'fb-bad');
+    void row.offsetWidth;
+    row.classList.add(kind === 'ok' ? 'fb-ok' : 'fb-bad');
+  }
+  if (kind === 'bad' && hint && text) {
+    hint.innerHTML = text;
+    clearTimeout(inputHintTimer);
+    inputHintTimer = setTimeout(() => { if (hint) hint.textContent = ''; }, 3500);
+  }
+}
+
 function renderGame() {
   const hasTurnTimer = game.mode === 'speed';
 
@@ -1084,24 +1267,22 @@ function renderGame() {
   ` : '';
 
   app.innerHTML = `
-    <div class="card">
+    <div class="card game-card">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundEnabled ? '♪' : '×'}</button>
       ${patternDisplayBlock(game.pattern)}
       ${dailyBonusChipHtml(game.dailyBonus, 'gameBonusChip')}
-      <div class="used-count" id="usedCount">${currentInstructionText()} · Slov: 0</div>
       ${clocksHtml}
-      <div class="error" id="gameErr"></div>
       ${turnTimerHtml}
-      <div class="turn-banner">Na tahu: <span id="turnName">${esc(game.turn === game.youAre ? game.myName : game.opponentName)}</span></div>
+      <div class="turn-status" id="turnStatus"></div>
       <div class="last-word" id="lastWordBanner"></div>
-      <div class="word-input">
-        <input id="wordInput" placeholder="${currentPlaceholder()}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" />
-        <button id="sendBtn">Odeslat</button>
+      ${wordInputHtml(currentPlaceholder())}
+      <div class="used-count" id="usedCount">${currentInstructionText()} · Slov: 0</div>
+      <div class="game-footer">
+        <div class="reaction-bar" id="reactionBar">
+          ${REACTIONS.map(e => `<button class="reaction-btn" data-emoji="${e}">${e}</button>`).join('')}
+        </div>
+        <button id="giveUpBtn" class="link-btn giveup-link">Vzdát kolo</button>
       </div>
-      <div class="reaction-bar" id="reactionBar">
-        ${REACTIONS.map(e => `<button class="reaction-btn" data-emoji="${e}">${e}</button>`).join('')}
-      </div>
-      <button id="giveUpBtn" class="secondary small" style="margin-top:10px">Vzdát kolo</button>
       <div class="feed" id="feed"></div>
     </div>
   `;
@@ -1121,6 +1302,7 @@ function renderGame() {
   const wordInput = document.getElementById('wordInput');
   document.getElementById('sendBtn').onclick = () => sendWord();
   wordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendWord(); });
+  bindWordInputExtras(wordInput);
 
   // Když vyjede mobilní klávesnice, doscroluj, ať zůstane vidět "poslední
   // slovo" panel i pole pro psaní — ne jen samotný input úplně dole.
@@ -1142,15 +1324,27 @@ function renderGame() {
   function sendWord() {
     const word = wordInput.value.trim();
     if (!word) return;
-    if (game.turn !== game.youAre) return; // nejsi na tahu
+    if (game.turn !== game.youAre) { inputFeedback('bad', 'Teď je na tahu soupeř.'); return; }
     wordInput.value = '';
     socket.emit('submit_word', { roomId: game.roomId, word });
+    wordInput.focus(); // klávesnice na mobilu zůstane otevřená
   }
 }
 
 function updateClocksUI() {
   if (!game) return;
   const hasTurnTimer = game.mode === 'speed';
+
+  const status = document.getElementById('turnStatus');
+  if (status) {
+    const mine = game.turn === game.youAre;
+    status.classList.toggle('mine', mine);
+    status.innerHTML = mine
+      ? '<span class="ts-dot"></span> Jsi na tahu — piš!'
+      : `Na tahu je ${esc(game.opponentName)}…`;
+    const row = document.getElementById('wordInputRow');
+    if (row) row.classList.toggle('waiting', !mine);
+  }
 
   const meEl = document.getElementById('clockMe');
   const oppEl = document.getElementById('clockOpp');
@@ -1264,6 +1458,8 @@ function renderResult(data) {
         <div class="rules-panel" id="panel-hist"><div class="rules-body feed word-history" style="max-height:220px">${historyHtml}</div></div>
       </div>
 
+      <div id="rematchBox" class="rematch-box"></div>
+
       <div class="menu-list" style="margin-top:20px">
         <button class="menu-item" id="againBtn"><span class="ic">🔎</span><span>Najít dalšího soupeře</span></button>
         <button class="secondary small" id="menuBtn" style="width:100%">Zpět do menu</button>
@@ -1285,16 +1481,82 @@ function renderResult(data) {
     };
   });
 
+  // Odveta — stav a vykreslení
+  rematchState = { phase: 'idle', msg: '', until: 0 };
+  if (data.reason === 'opponent_left') {
+    rematchState = { phase: 'unavailable', msg: `${opp.name} opustil(a) hru — odveta není možná.`, until: 0 };
+  }
+  renderRematchBox();
+
   document.getElementById('againBtn').onclick = () => {
     const n = game.myName;
     const mode = game.mode;
+    leaveResult();
     game = null;
     socket.emit('find_match', { nickname: n, mode });
     selectedMode = mode;
     renderSearching(n);
   };
-  document.getElementById('menuBtn').onclick = () => { selectedMode = game.mode; game = null; renderMenu(); };
+  document.getElementById('menuBtn').onclick = () => { selectedMode = game.mode; leaveResult(); game = null; renderMenu(); };
 }
+
+// ==== Odveta ====
+let rematchState = { phase: 'idle', msg: '', until: 0 };
+let rematchTimer = null;
+
+// Dá serveru vědět, že hráč opustil obrazovku výsledku (odveta pak
+// soupeři přestane být nabízena a on se to dozví).
+function leaveResult() {
+  clearInterval(rematchTimer);
+  if (game && game.finished && game.roomId) socket.emit('result_left', { roomId: game.roomId });
+}
+
+function renderRematchBox() {
+  const box = document.getElementById('rematchBox');
+  clearInterval(rematchTimer);
+  if (!box || !game) return;
+  const st = rematchState;
+  const secs = () => Math.max(0, Math.ceil((st.until - Date.now()) / 1000));
+
+  if (st.phase === 'idle') {
+    box.innerHTML = '<button class="menu-item" id="rematchBtn"><span class="ic">⚔</span><span>Požádat o odvetu</span></button>';
+    document.getElementById('rematchBtn').onclick = () => socket.emit('rematch_request', { roomId: game.roomId });
+  } else if (st.phase === 'pending') {
+    box.innerHTML = `<div class="rematch-msg">Čekám, jestli soupeř přijme odvetu… <b id="rmSecs">${secs()}</b> s</div>`;
+    rematchTimer = setInterval(() => { const e = document.getElementById('rmSecs'); if (e) e.textContent = secs(); }, 250);
+  } else if (st.phase === 'offered') {
+    box.innerHTML = `
+      <div class="rematch-msg"><b>${esc(st.from)}</b> nabízí odvetu! <span id="rmSecs">${secs()}</span> s</div>
+      <div class="rematch-actions">
+        <button id="rematchAccept">Přijmout</button>
+        <button class="secondary" id="rematchDecline">Odmítnout</button>
+      </div>`;
+    document.getElementById('rematchAccept').onclick = () => socket.emit('rematch_accept', { roomId: game.roomId });
+    document.getElementById('rematchDecline').onclick = () => {
+      socket.emit('rematch_decline', { roomId: game.roomId });
+      rematchState = { phase: 'idle', msg: '', until: 0 };
+      renderRematchBox();
+    };
+    rematchTimer = setInterval(() => { const e = document.getElementById('rmSecs'); if (e) e.textContent = secs(); }, 250);
+  } else if (st.phase === 'unavailable') {
+    box.innerHTML = `<div class="rematch-msg rematch-off">${esc(st.msg || 'Odveta není možná.')}</div>`;
+  } else if (st.phase === 'notice') {
+    // krátká zpráva (vypršelo / odmítnuto) a znovu možnost poslat návrh
+    box.innerHTML = `<div class="rematch-msg">${esc(st.msg)}</div><button class="menu-item" id="rematchBtn"><span class="ic">⚔</span><span>Požádat o odvetu</span></button>`;
+    document.getElementById('rematchBtn').onclick = () => socket.emit('rematch_request', { roomId: game.roomId });
+  }
+}
+
+function rematchSet(state) {
+  if (!game || !game.finished || !document.getElementById('rematchBox')) return;
+  rematchState = state;
+  renderRematchBox();
+}
+socket.on('rematch_pending', ({ ttlMs }) => rematchSet({ phase: 'pending', until: Date.now() + ttlMs }));
+socket.on('rematch_offered', ({ from, ttlMs }) => { playGo(); rematchSet({ phase: 'offered', from, until: Date.now() + ttlMs }); });
+socket.on('rematch_expired', () => rematchSet({ phase: 'notice', msg: 'Návrh na odvetu vypršel.' }));
+socket.on('rematch_declined', () => rematchSet({ phase: 'notice', msg: 'Soupeř odvetu odmítl(a).' }));
+socket.on('rematch_unavailable', ({ reason }) => rematchSet({ phase: 'unavailable', msg: reason }));
 
 // ==== Socket.io události ze serveru ====
 socket.on('waiting_for_opponent', () => { /* obrazovka hledání se už zobrazuje */ });
@@ -1306,14 +1568,15 @@ socket.on('lobby_created', ({ code }) => {
 });
 
 socket.on('lobby_error', ({ message }) => {
-  renderMenu(message);
+  renderPlayMenu(message);
 });
 
 socket.on('lobby_expired', () => {
-  renderMenu('Kód lobby vypršel, zkus to znovu.');
+  renderPlayMenu('Kód lobby vypršel, zkus to znovu.');
 });
 
 socket.on('match_found', (data) => {
+  clearInterval(rematchTimer);
   currentLobbyCode = null;
   renderRevealCountdown(data);
 });
@@ -1353,6 +1616,7 @@ socket.on('daily_state_update', (data) => {
     }
     playSwoosh();
     if (gameErr) gameErr.textContent = '';
+    inputFeedback('ok'); vibrate(15);
 
     const usedCount = document.getElementById('usedCount');
     if (usedCount) usedCount.textContent = `${patternInstruction(dailyState.pattern)} · Slov: ${data.usedWordsCount}`;
@@ -1391,14 +1655,16 @@ socket.on('daily_word_rejected', ({ reason, penaltyMs }) => {
     const cardEl = document.querySelector('.card');
     if (clockEl) { clockEl.classList.remove('penalty'); void clockEl.offsetWidth; clockEl.classList.add('penalty'); }
     if (cardEl) { cardEl.classList.remove('shake'); void cardEl.offsetWidth; cardEl.classList.add('shake'); }
-    if (gameErr) gameErr.innerHTML = `<span class="penalty-note">${reason} (−${penaltyMs / 1000} s)</span>`;
-  } else if (gameErr) {
-    gameErr.textContent = reason;
+    vibrate([60, 40, 120]);
+    inputFeedback('bad', `<span class="penalty-note">${reason} (−${penaltyMs / 1000} s)</span>`);
+  } else {
+    inputFeedback('bad', esc(reason));
   }
 });
 
 socket.on('nickname_rejected', ({ message }) => {
   dailyState = null;
+  try { localStorage.removeItem('dopisto_nickname'); } catch {}
   renderMenu(message || 'Přezdívka není povolená.');
 });
 
@@ -1462,6 +1728,8 @@ socket.on('state_update', (data) => {
     feed.prepend(div);
     playSwoosh();
     if (gameErr) gameErr.textContent = '';
+    if (data.lastPlayerIdx === game.youAre) { inputFeedback('ok'); vibrate(15); }
+    else { vibrate(35); const wi = document.getElementById('wordInput'); if (wi && document.activeElement !== wi) wi.focus(); }
 
     const usedCount = document.getElementById('usedCount');
     if (usedCount) usedCount.textContent = `${currentInstructionText()} · Slov: ${data.usedWordsCount}`;
@@ -1502,15 +1770,17 @@ socket.on('word_rejected', ({ reason, penaltyMs }) => {
   if (penaltyMs) {
     playPenalty();
     flashPenalty(game.youAre);
-    if (gameErr) gameErr.innerHTML = `<span class="penalty-note">${reason} (−${penaltyMs / 1000} s)</span>`;
-  } else if (gameErr) {
-    gameErr.textContent = reason;
+    vibrate([60, 40, 120]);
+    inputFeedback('bad', `<span class="penalty-note">${reason} (−${penaltyMs / 1000} s)</span>`);
+  } else {
+    inputFeedback('bad', esc(reason));
   }
 });
 
 socket.on('game_over', (data) => {
   if (!game) return;
   game.finished = true;
+  vibrate([80, 60, 160]);
   renderResult(data);
 });
 

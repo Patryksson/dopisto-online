@@ -31,6 +31,34 @@ const waitingQueue = { 2: [], middle: [], speed: [] };
 const lobbies = new Map(); // code -> { socket, nickname, elo, mode, timeout }
 const rooms = new Map(); // roomId -> room state
 
+// ==== Odveta ====
+// Po konci zápasu se na 10 minut drží záznam o dvojici hráčů. Odveta jde
+// poslat, jen dokud jsou OBA hráči na výsledkové obrazovce (nevrátili se do
+// menu a neodpojili se). Soupeř má REMATCH_TTL_MS na přijetí, jinak návrh vyprší.
+const REMATCH_TTL_MS = 12000;
+const rematches = new Map(); // původní roomId -> { mode, players, left, pending, cleanup }
+
+function rematchPresent(r, idx) {
+  return !r.left[idx] && r.players[idx].socket.connected;
+}
+function rematchClearPending(r) {
+  if (r.pending) { clearTimeout(r.pending.timeout); r.pending = null; }
+}
+function rematchPlayerLeft(r, id, idx) {
+  if (r.left[idx]) return;
+  r.left[idx] = true;
+  const hadPending = !!r.pending;
+  rematchClearPending(r);
+  const other = r.players[1 - idx];
+  if (rematchPresent(r, 1 - idx)) {
+    other.socket.emit('rematch_unavailable', {
+      reason: `${r.players[idx].nickname} opustil(a) obrazovku výsledku — odveta už není možná.`,
+      hadPending,
+    });
+  }
+  if (r.left[0] && r.left[1]) { clearTimeout(r.cleanup); rematches.delete(id); }
+}
+
 function removeFromQueues(socket) {
   for (const mode of MODES) {
     const q = waitingQueue[mode];
@@ -240,6 +268,9 @@ function setupGame(io, socket) {
   // ==== Denní výzva — sólo, bez soupeře, jednou denně stejné zadání pro
   // úplně všechny (viz dailyPattern v dictionary.js). ====
   socket.on('get_daily_leaderboard', (cb) => { if (typeof cb === 'function') cb(store.dailyLeaderboard(20)); });
+  socket.on('get_daily_info', (cb) => {
+    if (typeof cb === 'function') cb({ bonus: publicBonus(dailyBonusForDate()), pattern: dailyPattern() });
+  });
   socket.on('get_daily_bonus', (cb) => { if (typeof cb === 'function') cb(publicBonus(dailyBonusForDate())); });
 
   socket.on('start_daily_challenge', (payload) => {
@@ -354,7 +385,70 @@ function setupGame(io, socket) {
     });
   });
 
+  // ---- Odveta ----
+  function findRematch(roomId) {
+    const r = typeof roomId === 'string' ? rematches.get(roomId) : null;
+    if (!r) return {};
+    const idx = r.players.findIndex(p => p.socket.id === socket.id);
+    return idx === -1 ? {} : { r, idx };
+  }
+
+  socket.on('rematch_request', ({ roomId }) => {
+    const { r, idx } = findRematch(roomId);
+    if (!r) { socket.emit('rematch_unavailable', { reason: 'Odveta už není možná.' }); return; }
+    if (r.left[idx]) return;
+    if (!rematchPresent(r, 1 - idx)) {
+      socket.emit('rematch_unavailable', { reason: `${r.players[1 - idx].nickname} už opustil(a) obrazovku výsledku — odveta není možná.` });
+      return;
+    }
+    if (r.pending) return;
+    r.pending = {
+      from: idx,
+      timeout: setTimeout(() => {
+        r.pending = null;
+        for (let i = 0; i < 2; i++) if (rematchPresent(r, i)) r.players[i].socket.emit('rematch_expired');
+      }, REMATCH_TTL_MS),
+    };
+    socket.emit('rematch_pending', { ttlMs: REMATCH_TTL_MS });
+    r.players[1 - idx].socket.emit('rematch_offered', { from: r.players[idx].nickname, ttlMs: REMATCH_TTL_MS });
+  });
+
+  socket.on('rematch_accept', ({ roomId }) => {
+    const { r, idx } = findRematch(roomId);
+    if (!r || !r.pending || r.pending.from === idx) return;
+    const from = r.pending.from;
+    if (!rematchPresent(r, from) || !rematchPresent(r, idx)) return;
+    rematchClearPending(r);
+    clearTimeout(r.cleanup);
+    rematches.delete(roomId);
+    const a = r.players[from], b = r.players[idx];
+    removeFromQueues(a.socket); removeFromQueues(b.socket);
+    startMatch(
+      io,
+      { socket: a.socket, nickname: a.nickname, elo: store.getProfile(r.mode, a.nickname).elo },
+      { socket: b.socket, nickname: b.nickname, elo: store.getProfile(r.mode, b.nickname).elo },
+      r.mode
+    );
+  });
+
+  socket.on('rematch_decline', ({ roomId }) => {
+    const { r, idx } = findRematch(roomId);
+    if (!r || !r.pending || r.pending.from === idx) return;
+    const from = r.pending.from;
+    rematchClearPending(r);
+    if (rematchPresent(r, from)) r.players[from].socket.emit('rematch_declined');
+  });
+
+  socket.on('result_left', ({ roomId }) => {
+    const { r, idx } = findRematch(roomId);
+    if (r) rematchPlayerLeft(r, roomId, idx);
+  });
+
   socket.on('disconnect', () => {
+    for (const [id, r] of rematches) {
+      const idx = r.players.findIndex(p => p.socket.id === socket.id);
+      if (idx !== -1) rematchPlayerLeft(r, id, idx);
+    }
     removeFromQueues(socket);
     removeLobbyFor(socket);
 
@@ -555,6 +649,15 @@ function endRoom(io, room, winnerIdx, reason) {
   io.to(room.id).emit('game_over', { reason, winnerIdx, results, history: room.history });
 
   setTimeout(() => rooms.delete(room.id), 5000);
+
+  const cleanup = setTimeout(() => rematches.delete(room.id), 10 * 60 * 1000);
+  rematches.set(room.id, {
+    mode: room.mode,
+    players: room.players.map(p => ({ socket: p.socket, nickname: p.nickname })),
+    left: [false, false],
+    pending: null,
+    cleanup,
+  });
 }
 
 module.exports = { setupGame, startMatchmakingLoop };
