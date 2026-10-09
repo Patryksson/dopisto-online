@@ -53,4 +53,23 @@ function leaderboard(mode, limit = 100) {
     .map(p => ({ name: p.name, elo: p.elo, wins: p.wins, losses: p.losses }));
 }
 
-module.exports = { getProfile, recordResult, leaderboard };
+// ==== Denní výzva — nejlepší výsledek každé přezdívky za daný den (UTC) ====
+function utcDateKey(d = new Date()) { return d.toISOString().slice(0, 10); }
+
+function recordDaily(nickname, wordCount) {
+  const day = utcDateKey();
+  const daily = db.daily || (db.daily = {});
+  const today = daily[day] || (daily[day] = {});
+  const k = key(nickname);
+  if (!today[k] || today[k].count < wordCount) today[k] = { name: nickname, count: wordCount };
+  // uchovej jen posledních 7 dní
+  Object.keys(daily).sort().slice(0, -7).forEach(d => delete daily[d]);
+  save();
+}
+
+function dailyLeaderboard(limit = 20) {
+  const today = (db.daily && db.daily[utcDateKey()]) || {};
+  return Object.values(today).sort((a, b) => b.count - a.count).slice(0, limit);
+}
+
+module.exports = { getProfile, recordResult, leaderboard, recordDaily, dailyLeaderboard };

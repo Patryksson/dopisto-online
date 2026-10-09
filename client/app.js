@@ -360,13 +360,14 @@ function renderMenu(notice) {
     <div class="page">
     <div class="card">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundEnabled ? '♪' : '×'}</button>
+      <button type="button" class="bonus-badge" id="menuBonusBadge" hidden></button>
+      <div class="bonus-badge-pop" id="menuBonusPop" hidden></div>
       <img class="logo" src="logo.png" alt="Dopišto" />
       <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
 
       <div class="mode-select">
         ${modeSegmentedHtml(selectedMode)}
       </div>
-      <div id="menuBonus"></div>
 
       <div class="nickname-box">
         <svg class="nickname-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.5-7 8-7s8 3 8 7"></path></svg>
@@ -397,6 +398,7 @@ function renderMenu(notice) {
       <div class="menu-list">
         <button class="menu-item" id="dailyBtn"><span class="ic">🔥</span><span>Denní výzva</span></button>
       </div>
+      ${streakHtml()}
 
       <div class="rules">
         <button type="button" class="rules-summary" data-panel="p1"><span class="ic">ⓘ</span><span>Jak to funguje</span><span class="chevron">›</span></button>
@@ -487,7 +489,16 @@ function renderMenu(notice) {
   setupCodeBoxes();
 
   document.getElementById('leaderboardLinkBtn').onclick = () => renderLeaderboard(selectedMode);
-  socket.emit('get_daily_bonus', (b) => { const el = document.getElementById('menuBonus'); if (el && b) el.innerHTML = dailyBonusChipHtml(b) + `<div class="daily-bonus-desc">${b.desc}</div>`; });
+  socket.emit('get_daily_bonus', (b) => {
+    const badge = document.getElementById('menuBonusBadge');
+    const pop = document.getElementById('menuBonusPop');
+    if (!badge || !pop || !b) return;
+    badge.innerHTML = `<span class="dbc-ic">✦</span><span>${b.label} · +3 s</span>`;
+    pop.innerHTML = `<b>Bonus dne</b><br>${b.desc}`;
+    badge.hidden = false;
+    badge.onclick = () => { pop.hidden = !pop.hidden; };
+    document.addEventListener('click', (e) => { if (!badge.contains(e.target)) pop.hidden = true; });
+  });
   document.getElementById('dailyBtn').onclick = () => {
     const n = getNickname();
     const err = document.getElementById('err');
@@ -599,6 +610,56 @@ function getSavedDailyResult() {
 }
 function saveDailyResult(data) {
   try { localStorage.setItem(dailyStorageKey(), JSON.stringify(data)); } catch {}
+  updateStreak();
+}
+
+// Série dní po sobě, kdy byla denní výzva odehrána (lokální datum).
+function dateKeyOffset(offsetDays) {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function readStreak() {
+  try {
+    const s = JSON.parse(localStorage.getItem('dopisto_streak') || 'null');
+    if (!s) return { count: 0, best: 0, last: null };
+    return s;
+  } catch { return { count: 0, best: 0, last: null }; }
+}
+function updateStreak() {
+  const s = readStreak();
+  const today = todayKey();
+  if (s.last === today) return s;
+  s.count = s.last === dateKeyOffset(-1) ? s.count + 1 : 1;
+  s.best = Math.max(s.best || 0, s.count);
+  s.last = today;
+  try { localStorage.setItem('dopisto_streak', JSON.stringify(s)); } catch {}
+  return s;
+}
+// Aktuální série pro zobrazení — po vynechaném dni už neplatí.
+function currentStreak() {
+  const s = readStreak();
+  if (s.last === todayKey() || s.last === dateKeyOffset(-1)) return s.count;
+  return 0;
+}
+function streakHtml() {
+  const n = currentStreak();
+  if (!n) return '';
+  const best = readStreak().best || n;
+  return `<div class="streak-chip">🔥 Série: <b>${n}</b> ${n === 1 ? 'den' : (n < 5 ? 'dny' : 'dní')} v řadě${best > n ? ` · rekord ${best}` : ''}</div>`;
+}
+
+function loadDailyLeaderboard(elId) {
+  socket.emit('get_daily_leaderboard', (rows) => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (!rows || !rows.length) { el.innerHTML = '<div style="color:var(--muted); font-size:13px">Zatím nikdo nehrál.</div>'; return; }
+    const me = (getNickname() || '').trim().toLowerCase();
+    el.innerHTML = rows.map((r, i) => {
+      const safe = String(r.name).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+      return `<div class="dl-row${r.name.trim().toLowerCase() === me ? ' me' : ''}"><span class="dl-pos">${i + 1}.</span><span class="dl-name">${safe}</span><span class="dl-score">${r.count}</span></div>`;
+    }).join('');
+  });
 }
 
 let dailyState = null;
@@ -609,7 +670,7 @@ function startDailyChallenge() {
     renderDailyResult(saved, true);
     return;
   }
-  socket.emit('start_daily_challenge');
+  socket.emit('start_daily_challenge', { nickname: getNickname() });
   app.innerHTML = `
     <div class="card" style="text-align:center">
       <div class="spinner"></div>
@@ -732,6 +793,12 @@ function renderDailyResult(data, fromCache) {
       <div style="font-family:'Archivo Black','Space Grotesk',sans-serif; font-size:64px; color:var(--accent); margin:14px 0 0; line-height:1;">${data.wordCount}</div>
       <div style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:16px">SLOV ZA 180 SEKUND</div>
 
+      ${streakHtml()}
+      <div class="rules">
+        <button type="button" class="rules-summary" data-panel="dailylb"><span class="ic">★</span><span>Žebříček dne</span><span class="chevron">›</span></button>
+        <div class="rules-panel" id="panel-dailylb"><div class="rules-body" id="dailyLbBody"><div style="color:var(--muted); font-size:13px">Načítám…</div></div></div>
+      </div>
+
       <div class="rules">
         <button type="button" class="rules-summary" data-panel="dailyhist"><span class="ic">▤</span><span>Tvoje slova (${data.words.length})</span><span class="chevron">›</span></button>
         <div class="rules-panel" id="panel-dailyhist"><div class="rules-body feed word-history" style="max-height:220px">${historyHtml}</div></div>
@@ -753,6 +820,9 @@ function renderDailyResult(data, fromCache) {
     };
   });
 
+  loadDailyLeaderboard('dailyLbBody');
+  // panel se rozbaluje podle výšky — po načtení žebříčku ji přepočítej
+  setTimeout(() => { const p = document.getElementById('panel-dailylb'); if (p && p.previousElementSibling.classList.contains('open')) p.style.maxHeight = p.scrollHeight + 'px'; }, 500);
   document.getElementById('shareDailyBtn').onclick = () => shareDailyResult(data);
   document.getElementById('dailyMenuBtn').onclick = () => renderMenu();
 }
@@ -1446,7 +1516,7 @@ socket.on('rejoin_success', (data) => {
   game.turnTimer = data.turnTimer;
   game.turnTimeCap = data.turnTimer;
   game.usedWordsCount = data.usedWordsCount;
-  game.requiredLetter = data.requiredLetter || null;
+  game.dailyBonus = data.dailyBonus || game.dailyBonus || null;
   game.lastWholeSecond = [999, 999];
   game.lastHalfStep = [999, 999];
   game.lastHalfStepTurn = 999;

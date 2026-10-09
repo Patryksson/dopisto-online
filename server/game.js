@@ -184,7 +184,8 @@ function setupGame(io, socket) {
     const bank = BANK_TIME_BY_MODE[room.mode];
     const before = room.timeLeft[idx];
     const dailyBonusHit = checkDailyBonus(room.dailyBonus, { word: clean, myTimeLeft: before, opponentTimeLeft: room.timeLeft[1 - idx] });
-    room.timeLeft[idx] = Math.min(bank, before + BONUS_MS_BY_MODE[room.mode] + (dailyBonusHit ? DAILY_BONUS_EXTRA_MS : 0));
+    // Běžný bonus se ořezává na startovní banku, bonus dne ji smí přesáhnout.
+    room.timeLeft[idx] = Math.max(before, Math.min(bank, before + BONUS_MS_BY_MODE[room.mode])) + (dailyBonusHit ? DAILY_BONUS_EXTRA_MS : 0);
     const bonusMs = room.timeLeft[idx] - before;
 
     room.turn = 1 - idx;
@@ -222,9 +223,11 @@ function setupGame(io, socket) {
 
   // ==== Denní výzva — sólo, bez soupeře, jednou denně stejné zadání pro
   // úplně všechny (viz dailyPattern v dictionary.js). ====
+  socket.on('get_daily_leaderboard', (cb) => { if (typeof cb === 'function') cb(store.dailyLeaderboard(20)); });
   socket.on('get_daily_bonus', (cb) => { if (typeof cb === 'function') cb(publicBonus(dailyBonusForDate())); });
 
-  socket.on('start_daily_challenge', () => {
+  socket.on('start_daily_challenge', (payload) => {
+    socket.data.dailyNick = String((payload && payload.nickname) || '').trim().slice(0, 20);
     const existing = dailySessions.get(socket.id);
     if (existing) {
       clearInterval(existing.intervalId);
@@ -285,7 +288,7 @@ function setupGame(io, socket) {
 
     const before = session.timeLeft;
     const dailyBonusHit = checkDailyBonus(session.dailyBonus, { word: clean, myTimeLeft: before, opponentTimeLeft: null });
-    session.timeLeft = Math.min(DAILY_TIME_MS, before + DAILY_BONUS_MS + (dailyBonusHit ? DAILY_BONUS_EXTRA_MS : 0));
+    session.timeLeft = Math.max(before, Math.min(DAILY_TIME_MS, before + DAILY_BONUS_MS)) + (dailyBonusHit ? DAILY_BONUS_EXTRA_MS : 0);
     const bonusMs = session.timeLeft - before;
 
     socket.emit('daily_state_update', {
@@ -329,7 +332,7 @@ function setupGame(io, socket) {
       timeLeft: room.timeLeft,
       turnTimer: room.turnTimer,
       usedWordsCount: room.usedWords.size,
-      requiredLetter: currentRequiredLetter(room),
+      dailyBonus: publicBonus(room.dailyBonus),
     });
   });
 
@@ -400,6 +403,7 @@ function applyDailyPenalty(socket, session, amountMs, label) {
 function finishDaily(socket, session) {
   session.finished = true;
   clearInterval(session.intervalId);
+  if (socket.data.dailyNick) store.recordDaily(socket.data.dailyNick, session.usedWords.size);
   socket.emit('daily_over', { wordCount: session.usedWords.size, words: session.history, pattern: session.pattern });
   dailySessions.delete(socket.id);
 }
