@@ -334,7 +334,7 @@ const app = document.getElementById('app');
 let selectedMode = 2;
 function dailyBonusChipHtml(b, id) {
   if (!b) return '';
-  return `<div class="daily-bonus-chip" ${id ? `id="${id}"` : ''} title="${b.desc}"><span class="dbc-ic">✦</span><span>Bonus dne: <b>${b.label}</b> · +1 s</span></div>`;
+  return `<div class="daily-bonus-chip" ${id ? `id="${id}"` : ''} title="${b.desc}"><span class="dbc-ic">✦</span><span>Bonus dne: <b>${b.label}</b> · +3 s</span></div>`;
 }
 function showDailyBonusHit(clockId) {
   const clockEl = document.getElementById(clockId);
@@ -366,6 +366,7 @@ function renderMenu(notice) {
       <div class="mode-select">
         ${modeSegmentedHtml(selectedMode)}
       </div>
+      <div id="menuBonus"></div>
 
       <div class="nickname-box">
         <svg class="nickname-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.5-7 8-7s8 3 8 7"></path></svg>
@@ -393,7 +394,6 @@ function renderMenu(notice) {
 
       <div class="or-sep"><span class="line"></span><span>nebo hraj sám</span><span class="line"></span></div>
 
-      <div id="menuBonus"></div>
       <div class="menu-list">
         <button class="menu-item" id="dailyBtn"><span class="ic">🔥</span><span>Denní výzva</span></button>
       </div>

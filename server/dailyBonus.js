@@ -8,7 +8,7 @@ const DAILY_BONUS_TYPES = [
   { id: 'comeback', label: 'Comeback', desc: 'Platné slovo v okamžiku, kdy máš méně času než soupeř.', check: c => c.opponentTimeLeft != null && c.myTimeLeft < c.opponentTimeLeft },
   { id: 'lastSecond', label: 'Last Second', desc: 'Slovo odešli s méně než 5 s na hodinách.', check: c => c.myTimeLeft < 5000 },
 ];
-const DAILY_BONUS_EXTRA_MS = 1000;
+const DAILY_BONUS_EXTRA_MS = 3000;
 
 function dailyBonusForDate(date = new Date()) {
   const start = Date.UTC(date.getUTCFullYear(), 0, 0);

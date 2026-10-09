@@ -116030,6 +116030,8 @@ nuděný
 nuerský
 nugát
 nugátový
+nugeta
+nugetka
 nuhlíček
 nuhlíčková
 nukleace
@@ -116123,7 +116125,9 @@ nutkat
 nutkavý
 nutkavější
 nutkání
+nutnost
 nutný
+nutně
 nutnější
 nutr
 nutrie
@@ -193808,6 +193812,7 @@ sálat
 sálavý
 sálavější
 sálová
+sálovky
 sálový
 sálovější
 sálský
