@@ -493,8 +493,9 @@ function renderMenu(notice) {
     const badge = document.getElementById('menuBonusBadge');
     const pop = document.getElementById('menuBonusPop');
     if (!badge || !pop || !b) return;
-    badge.innerHTML = `<span class="dbc-ic">✦</span><span>${b.label} · +3 s</span>`;
-    pop.innerHTML = `<b>Bonus dne</b><br>${b.desc}`;
+    badge.innerHTML = '<span class="dbc-ic">✦</span>';
+    badge.setAttribute('aria-label', 'Bonus dne: ' + b.label);
+    pop.innerHTML = `<b>Bonus dne: ${b.label} · +3 s</b><br>${b.desc}`;
     badge.hidden = false;
     badge.onclick = () => { pop.hidden = !pop.hidden; };
     document.addEventListener('click', (e) => { if (!badge.contains(e.target)) pop.hidden = true; });
