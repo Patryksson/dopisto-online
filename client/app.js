@@ -505,8 +505,13 @@ function renderMenu(notice) {
     const err = document.getElementById('err');
     if (!n) { err.textContent = 'Zadej přezdívku.'; return; }
     saveNickname(n);
-    ensureAudioCtx();
-    startDailyChallenge();
+    try {
+      ensureAudioCtx();
+      startDailyChallenge();
+    } catch (e) {
+      console.error(e);
+      err.textContent = 'Denní výzvu se nepodařilo spustit: ' + (e && e.message ? e.message : e);
+    }
   };
 }
 
