@@ -23,7 +23,7 @@ app.use(express.static(path.join(__dirname, '..', 'client'), {
     if (filePath.endsWith('.png') || filePath.endsWith('.jpg') || filePath.endsWith('.webp')) {
       res.setHeader('Cache-Control', 'public, max-age=604800, immutable'); // 7 dní
     } else {
-      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate'); // 1 hodina
+      res.setHeader('Cache-Control', 'no-cache'); // vždy ověřit (ETag) — změny se projeví hned
     }
   },
 }));
