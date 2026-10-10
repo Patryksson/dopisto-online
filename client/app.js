@@ -120,9 +120,9 @@ const SOUND_PREFS_INFO = {
   penalty: { icon: '⚠️', label: 'Penalizace',    desc: 'Varovný zvuk při chybě a ztrátě času' },
   results: { icon: '🏆', label: 'Výhra / prohra', desc: 'Fanfára nebo smutný tón na konci hry' },
   vibrate: { icon: '📳', label: 'Vibrace',       desc: 'Jemné vibrace na mobilu (chyba, tvůj tah, konec)' },
-  nosuggest: { icon: '⌨️', label: 'Bez návrhů klávesnice', desc: 'Skryje návrhy slov nad klávesnicí (jen u psaní slov ve hře)' },
+  vkeyboard: { icon: '⌨️', label: 'Vlastní klávesnice', desc: 'Česká klávesnice přímo ve hře, bez návrhů slov (jen mobil a tablet)' },
 };
-let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true, nosuggest: false };
+let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true, vkeyboard: true };
 try { Object.assign(soundPrefs, JSON.parse(localStorage.getItem('dopisto_sound_prefs') || '{}')); } catch {}
 function saveSoundPrefs() { try { localStorage.setItem('dopisto_sound_prefs', JSON.stringify(soundPrefs)); } catch {} }
 function soundOn(cat) { return soundEnabled && soundPrefs[cat] !== false; }
@@ -449,7 +449,7 @@ function settingsHtml() {
       <span class="setting-text"><b>${i.label}</b><small>${i.desc}</small></span>
       <input type="checkbox" class="switch" data-pref="${k}" ${soundPrefs[k] !== false ? 'checked' : ''} />
     </label>`;
-  }).join('') + '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře. „Bez návrhů klávesnice“ se projeví od příští hry.</div>';
+  }).join('') + '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře. „Vlastní klávesnice“ se projeví od příští hry.</div>';
 }
 
 function renderMenu(notice) {
@@ -1413,7 +1413,7 @@ function wordInputHtml(placeholder) {
   return `
     <div class="word-input" id="wordInputRow">
       <div class="wi-field">
-        <input id="wordInput" name="dopisto-slovo" placeholder="${placeholder}" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-autocomplete="none" data-gramm="false" data-lpignore="true" data-form-type="other"${soundPrefs.nosuggest ? ' inputmode="email"' : ''} />
+        <input id="wordInput" name="dopisto-slovo" placeholder="${placeholder}" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-autocomplete="none" data-gramm="false" data-lpignore="true" data-form-type="other"${useVK() ? ' inputmode="none"' : ''} />
         <button type="button" class="wi-clear" id="clearBtn" aria-label="Smazat" hidden>⌫</button>
       </div>
       <button id="sendBtn">Odeslat</button>
@@ -1423,6 +1423,7 @@ function wordInputHtml(placeholder) {
 
 // Tlačítka nesmí vzít poli fokus (jinak se na mobilu zavře klávesnice).
 function bindWordInputExtras(wordInput) {
+  if (useVK()) mountVK(wordInput);
   const keepFocus = (el) => { if (el) el.addEventListener('pointerdown', e => e.preventDefault()); };
   const clearBtn = document.getElementById('clearBtn');
   keepFocus(clearBtn); keepFocus(document.getElementById('sendBtn'));
@@ -1433,6 +1434,177 @@ function bindWordInputExtras(wordInput) {
     const hint = document.getElementById('gameErr');
     if (hint) hint.textContent = '';
   });
+}
+
+// ==== Vlastní klávesnice (mobil / tablet) ====
+// Systémová klávesnice se neotevře (inputmode="none"), místo ní je dole česká
+// QWERTZ klávesnice. Háčky a čárky: podržením písmene, nebo mrtvými klávesami ˇ a ´.
+const VK_ALTS = { a: ['á'], c: ['č'], d: ['ď'], e: ['é', 'ě'], i: ['í'], n: ['ň'], o: ['ó'], r: ['ř'], s: ['š'], t: ['ť'], u: ['ú', 'ů'], y: ['ý'], z: ['ž'] };
+const VK_HACEK = { c: 'č', d: 'ď', e: 'ě', n: 'ň', r: 'ř', s: 'š', t: 'ť', z: 'ž' };
+const VK_CARKA = { a: 'á', e: 'é', i: 'í', o: 'ó', u: 'ú', y: 'ý' };
+const VK_LONG_MS = 320;
+let vkEl = null, vkObserver = null, vkInput = null, vkDead = null, vkAbort = null;
+
+function useVK() {
+  if (soundPrefs.vkeyboard === false) return false;
+  try {
+    if (/[?&]vk=1\b/.test(location.search)) return true;
+    return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  } catch { return false; }
+}
+
+function unmountVK() {
+  if (vkAbort) { vkAbort.abort(); vkAbort = null; }
+  if (vkObserver) { vkObserver.disconnect(); vkObserver = null; }
+  if (vkEl) { vkEl.remove(); vkEl = null; }
+  vkInput = null; vkDead = null;
+  document.body.classList.remove('has-vk');
+}
+
+function vkKeyHtml(k) {
+  const alts = VK_ALTS[k];
+  return `<button type="button" class="vk-key" data-k="${k}">${k}${alts ? `<i>${alts.join('')}</i>` : ''}</button>`;
+}
+
+function mountVK(input) {
+  unmountVK();
+  vkAbort = new AbortController();
+  const sig = { signal: vkAbort.signal };
+  vkInput = input;
+  vkEl = document.createElement('div');
+  vkEl.className = 'vk';
+  vkEl.id = 'vk';
+  vkEl.innerHTML = `
+    <div class="vk-rows">
+      <div class="vk-row">${'qwertzuiop'.split('').map(vkKeyHtml).join('')}</div>
+      <div class="vk-row vk-row2">${'asdfghjkl'.split('').map(vkKeyHtml).join('')}</div>
+      <div class="vk-row">
+        <button type="button" class="vk-key vk-mod" data-k="hacek" aria-label="Háček">ˇ</button>
+        <button type="button" class="vk-key vk-mod" data-k="carka" aria-label="Čárka">´</button>
+        ${'yxcvbnm'.split('').map(vkKeyHtml).join('')}
+        <button type="button" class="vk-key vk-back" data-k="back" aria-label="Smazat">⌫</button>
+      </div>
+      <div class="vk-row"><button type="button" class="vk-key vk-send" data-k="send">Odeslat</button></div>
+    </div>`;
+  document.body.appendChild(vkEl);
+  document.body.classList.add('has-vk');
+  const setH = () => document.documentElement.style.setProperty('--vk-h', (vkEl ? vkEl.offsetHeight : 230) + 'px');
+  setH();
+  requestAnimationFrame(() => {
+    setH();
+    const row = document.getElementById('wordInputRow');
+    if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+  });
+
+  // klávesnice zmizí, jakmile obrazovka s polem pro slovo zmizí
+  const appEl = document.getElementById('app');
+  if (appEl && window.MutationObserver) {
+    vkObserver = new MutationObserver(() => { if (!document.getElementById('wordInput')) unmountVK(); });
+    vkObserver.observe(appEl, { childList: true });
+  }
+
+  const rows = vkEl.querySelector('.vk-rows');
+  let press = null, repeatT = null, repeatI = null;
+
+  function setDead(kind) {
+    vkDead = kind;
+    vkEl.querySelectorAll('.vk-mod').forEach(b => b.classList.toggle('on', b.dataset.k === kind));
+  }
+  function changed() {
+    vkInput.dispatchEvent(new Event('input', { bubbles: true }));
+    vkInput.scrollLeft = vkInput.scrollWidth;
+  }
+  function insert(ch) {
+    if (vkInput.value.length >= 40) return;
+    vkInput.value += ch;
+    changed();
+  }
+  function typeLetter(k) {
+    let ch = k;
+    if (vkDead === 'hacek' && VK_HACEK[k]) ch = VK_HACEK[k];
+    else if (vkDead === 'carka' && VK_CARKA[k]) ch = VK_CARKA[k];
+    setDead(null);
+    insert(ch);
+  }
+  function back() {
+    if (!vkInput.value) return;
+    vkInput.value = vkInput.value.slice(0, -1);
+    changed();
+  }
+  function stopRepeat() { clearTimeout(repeatT); clearInterval(repeatI); repeatT = repeatI = null; }
+  function closePopup() {
+    if (press && press.popup) { press.popup.remove(); press.popup = null; }
+  }
+  function showPopup(key, k) {
+    const alts = VK_ALTS[k];
+    const pop = document.createElement('div');
+    pop.className = 'vk-pop';
+    pop.innerHTML = [k, ...alts].map(c => `<div class="vk-alt" data-c="${c}">${c}</div>`).join('');
+    rows.appendChild(pop);
+    const w = pop.offsetWidth;
+    let left = key.offsetLeft + key.offsetWidth / 2 - w / 2;
+    left = Math.max(0, Math.min(left, rows.clientWidth - w));
+    pop.style.left = left + 'px';
+    pop.style.top = (key.offsetTop - pop.offsetHeight - 6) + 'px';
+    return pop;
+  }
+
+  vkEl.addEventListener('contextmenu', e => e.preventDefault());
+  vkEl.addEventListener('pointerdown', (e) => {
+    const key = e.target.closest && e.target.closest('.vk-key');
+    if (!key) return;
+    e.preventDefault();
+    const k = key.dataset.k;
+    key.classList.add('down');
+    vibrate(8);
+    if (k !== 'send') playClick();
+    if (k === 'back') {
+      back();
+      repeatT = setTimeout(() => { repeatI = setInterval(back, 70); }, 380);
+      press = { key, k };
+    } else if (k === 'send') {
+      press = { key, k };
+    } else if (k === 'hacek' || k === 'carka') {
+      setDead(vkDead === k ? null : k);
+      press = { key, k };
+    } else {
+      press = { key, k };
+      if (VK_ALTS[k]) press.timer = setTimeout(() => { press.popup = showPopup(key, k); }, VK_LONG_MS);
+    }
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!press || !press.popup) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const alt = el && el.closest && el.closest('.vk-alt');
+    press.popup.querySelectorAll('.vk-alt').forEach(a => a.classList.toggle('hot', a === alt));
+  }, sig);
+  const release = (e) => {
+    if (!press) return;
+    const { key, k } = press;
+    key.classList.remove('down');
+    clearTimeout(press.timer);
+    stopRepeat();
+    if (e.type !== 'pointercancel') {
+      if (k === 'send') {
+        vkInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      } else if (VK_ALTS[k]) {
+        if (press.popup) {
+          const el = document.elementFromPoint(e.clientX, e.clientY);
+          const alt = el && el.closest && el.closest('.vk-alt');
+          setDead(null);
+          insert(alt ? alt.dataset.c : k);
+        } else {
+          typeLetter(k);
+        }
+      } else if (k !== 'back' && k !== 'hacek' && k !== 'carka') {
+        typeLetter(k);
+      }
+    }
+    closePopup();
+    press = null;
+  };
+  document.addEventListener('pointerup', release, sig);
+  document.addEventListener('pointercancel', release, sig);
 }
 
 // Zpětná vazba u pole: 'ok' = zelené probliknutí, 'bad' = zatřesení + důvod.
