@@ -113,9 +113,13 @@ function bindModeSegmented(getMode, onModeChange) {
 // ==== Zvuk (Web Audio API — žádné externí soubory) ====
 let audioCtx = null;
 // Nastavení zvuku po kategoriích + vibrace (uloženo v prohlížeči).
-const SOUND_PREF_LABELS = {
-  ticks: 'Tikání hodin', clicks: 'Kliknutí', words: 'Slova a předání tahu',
-  penalty: 'Penalizace', results: 'Výhra / prohra', vibrate: 'Vibrace (mobil)',
+const SOUND_PREFS_INFO = {
+  ticks:   { icon: '⏱️', label: 'Tikání hodin',  desc: 'Tikot hodin, zrychlí v posledních sekundách' },
+  clicks:  { icon: '👆', label: 'Kliknutí',      desc: 'Zvuk při stisku tlačítek' },
+  words:   { icon: '💬', label: 'Slova a tahy',  desc: 'Zvuk při odeslání slova a předání tahu' },
+  penalty: { icon: '⚠️', label: 'Penalizace',    desc: 'Varovný zvuk při chybě a ztrátě času' },
+  results: { icon: '🏆', label: 'Výhra / prohra', desc: 'Fanfára nebo smutný tón na konci hry' },
+  vibrate: { icon: '📳', label: 'Vibrace',       desc: 'Jemné vibrace na mobilu (chyba, tvůj tah, konec)' },
 };
 let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true };
 try { Object.assign(soundPrefs, JSON.parse(localStorage.getItem('dopisto_sound_prefs') || '{}')); } catch {}
@@ -295,11 +299,19 @@ function playClick() {
   osc.stop(ctx.currentTime + 0.035);
 }
 
+// Ikona reproduktoru: s vlnami = zvuk zapnutý, přeškrtnutá = vypnutý.
+function soundIconHtml() {
+  const base = '<path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" stroke="none"/>';
+  const on = '<path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M18.8 5.7a9 9 0 0 1 0 12.6"/>';
+  const off = '<path d="M17 9l5 6M22 9l-5 6"/>';
+  return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${base}${soundEnabled ? on : off}</svg>`;
+}
+
 function toggleSound() {
   soundEnabled = !soundEnabled;
   localStorage.setItem('word_duel_sound', soundEnabled ? 'on' : 'off');
   const btn = document.getElementById('soundBtn');
-  if (btn) btn.textContent = soundEnabled ? '♪' : '×';
+  if (btn) { btn.innerHTML = soundIconHtml(); btn.title = soundEnabled ? 'Zvuk zapnutý' : 'Zvuk vypnutý'; }
 }
 
 // ==== Texty pravidel (normální psaní, ne jen tiskací — viz CSS override) ====
@@ -428,10 +440,15 @@ function fmtCountdown(ms) {
 let menuTimer = null;
 
 function settingsHtml() {
-  return Object.keys(SOUND_PREF_LABELS).map(k => `
-    <label class="setting-row"><span>${SOUND_PREF_LABELS[k]}</span>
-      <input type="checkbox" data-pref="${k}" ${soundPrefs[k] !== false ? 'checked' : ''} />
-    </label>`).join('') + '<div class="setting-note">Hlavní zapnutí/vypnutí zvuku je ikona ♪ vpravo nahoře.</div>';
+  return Object.keys(SOUND_PREFS_INFO).map(k => {
+    const i = SOUND_PREFS_INFO[k];
+    return `
+    <label class="setting-row">
+      <span class="setting-ic">${i.icon}</span>
+      <span class="setting-text"><b>${i.label}</b><small>${i.desc}</small></span>
+      <input type="checkbox" class="switch" data-pref="${k}" ${soundPrefs[k] !== false ? 'checked' : ''} />
+    </label>`;
+  }).join('') + '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře.</div>';
 }
 
 function renderMenu(notice) {
@@ -441,7 +458,7 @@ function renderMenu(notice) {
   app.innerHTML = `
     <div class="page">
     <div class="card">
-      <button class="icon-btn sound-toggle" id="soundBtn">${soundEnabled ? '♪' : '×'}</button>
+      <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       <img class="logo" src="logo.png" alt="Dopišto" />
       <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
 
@@ -449,7 +466,7 @@ function renderMenu(notice) {
       <div class="error" id="err">${notice || ''}</div>
 
       <div class="menu-list">
-        <button class="menu-item" id="playBtn"><span class="ic">⚔</span><span>Hrát</span></button>
+        <button class="menu-item" id="playBtn"><span class="ic">⚔</span><span>Hrát online</span></button>
       </div>
 
       <div class="daily-card">
@@ -475,7 +492,7 @@ function renderMenu(notice) {
       </div>
 
       <div class="rules">
-        <button type="button" class="rules-summary" data-panel="p3"><span class="ic">⚙</span><span>Nastavení zvuku</span><span class="chevron">›</span></button>
+        <button type="button" class="rules-summary" data-panel="p3"><span class="ic">🔊</span><span>Zvuky a vibrace</span><span class="chevron">›</span></button>
         <div class="rules-panel" id="panel-p3"><div class="rules-body" id="settingsBody">${settingsHtml()}</div></div>
       </div>
     </div>
@@ -563,9 +580,9 @@ function renderPlayMenu(notice) {
   app.innerHTML = `
     <div class="page">
     <div class="card">
-      <button class="icon-btn sound-toggle" id="soundBtn">${soundEnabled ? '♪' : '×'}</button>
+      <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       <button type="button" class="back-link" id="playBackBtn">‹ Zpět</button>
-      <h1 class="play-title">Hrát</h1>
+      <h1 class="play-title">Hrát online</h1>
       <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
 
       <div class="mode-select">
@@ -844,7 +861,7 @@ function renderDailyReveal(data) {
 function renderDailyGame() {
   app.innerHTML = `
     <div class="card">
-      <button class="icon-btn sound-toggle" id="soundBtn">${soundEnabled ? '♪' : '×'}</button>
+      <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       ${patternTilesHtml(dailyState.pattern)}
       ${dailyBonusChipHtml(dailyState.dailyBonus, 'gameBonusChip')}
       <div class="used-count" id="usedCount">${patternInstruction(dailyState.pattern)} · Slov: 0</div>
@@ -1268,7 +1285,7 @@ function renderGame() {
 
   app.innerHTML = `
     <div class="card game-card">
-      <button class="icon-btn sound-toggle" id="soundBtn">${soundEnabled ? '♪' : '×'}</button>
+      <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       ${patternDisplayBlock(game.pattern)}
       ${dailyBonusChipHtml(game.dailyBonus, 'gameBonusChip')}
       ${clocksHtml}
