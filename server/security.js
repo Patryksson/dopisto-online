@@ -55,7 +55,7 @@ const LIMITS = {
   submit_word: [12, 5000], submit_daily_word: [12, 5000],
   start_daily_challenge: [4, 10000], end_daily_challenge: [4, 10000],
   send_reaction: [8, 5000], get_leaderboard: [10, 10000], get_daily_leaderboard: [10, 10000],
-  get_daily_bonus: [10, 10000], get_daily_info: [10, 10000], submit_report: [3, 60000], rejoin_room: [6, 10000], give_up: [4, 10000],
+  get_daily_bonus: [10, 10000], get_daily_info: [10, 10000], get_daily_stats: [6, 10000], submit_report: [3, 60000], report_player: [4, 60000], rejoin_room: [6, 10000], give_up: [4, 10000],
   rematch_request: [4, 10000], rematch_accept: [4, 10000], rematch_decline: [4, 10000], result_left: [6, 10000],
 };
 const DEFAULT_LIMIT = [30, 10000];
@@ -64,7 +64,7 @@ const MAX_STRIKES = 8;
 // Události, jejichž handler čeká objekt jako první argument.
 const NEEDS_OBJECT = new Set([
   'find_match', 'create_lobby', 'join_lobby', 'submit_word', 'give_up', 'send_reaction',
-  'get_leaderboard', 'submit_daily_word', 'rejoin_room', 'rematch_request', 'rematch_accept', 'rematch_decline', 'result_left',
+  'get_leaderboard', 'submit_daily_word', 'rejoin_room', 'rematch_request', 'rematch_accept', 'rematch_decline', 'result_left', 'report_player', 'get_daily_stats',
 ]);
 
 function attachSocketGuard(socket) {

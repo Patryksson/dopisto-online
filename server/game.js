@@ -36,6 +36,7 @@ const rooms = new Map(); // roomId -> room state
 // poslat, jen dokud jsou OBA hráči na výsledkové obrazovce (nevrátili se do
 // menu a neodpojili se). Soupeř má REMATCH_TTL_MS na přijetí, jinak návrh vyprší.
 const REMATCH_TTL_MS = 12000;
+const finishedGames = new Map(); // roomId -> snapshot dohraného zápasu (pro nahlášení hráče)
 const rematches = new Map(); // původní roomId -> { mode, players, left, pending, cleanup }
 
 function rematchPresent(r, idx) {
@@ -220,7 +221,7 @@ function setupGame(io, socket) {
     }
 
     room.usedWords.add(clean);
-    room.history.push({ word: clean, playerIdx: idx });
+    room.history.push({ word: clean, playerIdx: idx, at: Date.now() });
 
     // Bonus k hlavnímu času za správně odeslané slovo — nesmí přesáhnout
     // startovní hodnotu banky daného režimu.
@@ -268,6 +269,52 @@ function setupGame(io, socket) {
   // ==== Denní výzva — sólo, bez soupeře, jednou denně stejné zadání pro
   // úplně všechny (viz dailyPattern v dictionary.js). ====
   socket.on('get_daily_leaderboard', (cb) => { if (typeof cb === 'function') cb(store.dailyLeaderboard(20)); });
+  socket.on('get_daily_stats', (payload, cb) => {
+    if (typeof cb !== 'function' || !payload || typeof payload !== 'object') return;
+    const n = Math.max(0, Math.min(500, parseInt(payload.wordCount, 10) || 0));
+    const nick = sanitizeNickname(payload.nickname);
+    cb(store.dailyStats(nick.ok ? nick.nick : '', n));
+  });
+  // Nahlášení soupeře po zápase (podezření na cheating apod.).
+  socket.on('report_player', (payload, cb) => {
+    const reply = (res) => { if (typeof cb === 'function') cb(res); };
+    if (!payload || typeof payload !== 'object') return reply({ ok: false });
+    const g = finishedGames.get(payload.roomId);
+    if (!g) return reply({ ok: false, message: 'Tento zápas už nelze nahlásit (platí 30 minut po skončení).' });
+    const idx = g.players.findIndex(p => p.id === socket.id);
+    if (idx === -1) return reply({ ok: false, message: 'Nahlásit můžeš jen soupeře z vlastního zápasu.' });
+    if (g.reportedBy.has(idx)) return reply({ ok: false, message: 'Tohoto soupeře jsi už nahlásil(a).' });
+    const reasons = { cheating: 'Podezření na cheating', nick: 'Nevhodná přezdívka', behavior: 'Chování', other: 'Jiný důvod' };
+    const reason = typeof payload.reason === 'string' && reasons[payload.reason] ? payload.reason : null;
+    if (!reason) return reply({ ok: false, message: 'Vyber důvod.' });
+    const note = typeof payload.note === 'string' ? payload.note.trim().slice(0, 300) : '';
+    const oppIdx = 1 - idx;
+    // Časy mezi slovy soupeře — užitečné k posouzení cheatingu.
+    let prev = g.startedAt || (g.history[0] && g.history[0].at) || 0;
+    const gaps = [];
+    g.history.forEach(h => { if (h.playerIdx === oppIdx && h.at && prev) gaps.push(h.at - prev); if (h.at) prev = h.at; });
+    const oppWords = g.history.filter(h => h.playerIdx === oppIdx).map(h => h.word);
+    const stats = gaps.length ? {
+      words: oppWords.length,
+      avgMs: Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length),
+      minMs: Math.min(...gaps),
+    } : { words: oppWords.length };
+    g.reportedBy.add(idx);
+    store.addReport({
+      type: 'player',
+      reason: reasons[reason],
+      text: note || '(bez poznámky)',
+      nickname: g.players[idx].nickname,
+      reported: g.players[oppIdx].nickname,
+      mode: g.mode,
+      pattern: g.pattern,
+      endReason: g.reason,
+      opponentStats: stats,
+      opponentWords: oppWords.slice(0, 60),
+      words: g.history.length,
+    });
+    reply({ ok: true });
+  });
   // Hlášení chyb, chybějících slov, nápadů a nahlášení hráčů.
   socket.on('submit_report', (payload, cb) => {
     const reply = (res) => { if (typeof cb === 'function') cb(res); };
@@ -449,7 +496,8 @@ function setupGame(io, socket) {
       io,
       { socket: a.socket, nickname: a.nickname, elo: store.getProfile(r.mode, a.nickname).elo },
       { socket: b.socket, nickname: b.nickname, elo: store.getProfile(r.mode, b.nickname).elo },
-      r.mode
+      r.mode,
+      r.starter != null ? r.players[1 - r.starter].nickname : undefined
     );
   });
 
@@ -542,9 +590,10 @@ function finishDaily(socket, session) {
   dailySessions.delete(socket.id);
 }
 
-function startMatch(io, a, b, mode) {
+function startMatch(io, a, b, mode, firstNickname) {
   const roomId = 'room_' + Math.random().toString(36).slice(2, 10);
-  const turnStart = Math.random() < 0.5 ? 0 : 1;
+  // Nový zápas: první tah losuje se 50/50. Odveta: začíná ten, kdo minule nezačínal.
+  const turnStart = firstNickname === b.nickname ? 1 : firstNickname === a.nickname ? 0 : (Math.random() < 0.5 ? 0 : 1);
 
   const pattern = generatePattern(mode);
   const bank = BANK_TIME_BY_MODE[mode];
@@ -560,6 +609,7 @@ function startMatch(io, a, b, mode) {
       { socket: b.socket, nickname: b.nickname, elo: b.elo, connected: true, token: crypto.randomBytes(8).toString('hex'), lastReactionAt: 0 },
     ],
     turn: turnStart,
+    turnStart,
     usedWords: new Set(),
     history: [],
     timeLeft,
@@ -594,6 +644,7 @@ function startMatch(io, a, b, mode) {
 
 function beginRoom(io, room) {
   if (room.finished || room.pendingDisconnect) return;
+  if (!room.startedAt) room.startedAt = Date.now();
   resumeTicking(io, room);
 }
 
@@ -672,9 +723,24 @@ function endRoom(io, room, winnerIdx, reason) {
 
   setTimeout(() => rooms.delete(room.id), 5000);
 
+  // Snapshot zápasu pro případné nahlášení hráče (drží se 30 minut).
+  finishedGames.set(room.id, {
+    mode: room.mode,
+    pattern: room.pattern,
+    reason,
+    winnerIdx,
+    startedAt: room.startedAt || null,
+    endedAt: Date.now(),
+    players: room.players.map(p => ({ id: p.socket.id, nickname: p.nickname })),
+    history: room.history.map(h => ({ word: h.word, playerIdx: h.playerIdx, at: h.at })),
+    reportedBy: new Set(),
+  });
+  setTimeout(() => finishedGames.delete(room.id), 30 * 60 * 1000);
+
   const cleanup = setTimeout(() => rematches.delete(room.id), 10 * 60 * 1000);
   rematches.set(room.id, {
     mode: room.mode,
+    starter: room.turnStart,
     players: room.players.map(p => ({ socket: p.socket, nickname: p.nickname })),
     left: [false, false],
     pending: null,

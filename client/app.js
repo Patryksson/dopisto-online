@@ -120,8 +120,9 @@ const SOUND_PREFS_INFO = {
   penalty: { icon: '⚠️', label: 'Penalizace',    desc: 'Varovný zvuk při chybě a ztrátě času' },
   results: { icon: '🏆', label: 'Výhra / prohra', desc: 'Fanfára nebo smutný tón na konci hry' },
   vibrate: { icon: '📳', label: 'Vibrace',       desc: 'Jemné vibrace na mobilu (chyba, tvůj tah, konec)' },
+  nosuggest: { icon: '⌨️', label: 'Bez návrhů klávesnice', desc: 'Skryje návrhy slov nad klávesnicí (jen u psaní slov ve hře)' },
 };
-let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true };
+let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true, nosuggest: false };
 try { Object.assign(soundPrefs, JSON.parse(localStorage.getItem('dopisto_sound_prefs') || '{}')); } catch {}
 function saveSoundPrefs() { try { localStorage.setItem('dopisto_sound_prefs', JSON.stringify(soundPrefs)); } catch {} }
 function soundOn(cat) { return soundEnabled && soundPrefs[cat] !== false; }
@@ -448,7 +449,7 @@ function settingsHtml() {
       <span class="setting-text"><b>${i.label}</b><small>${i.desc}</small></span>
       <input type="checkbox" class="switch" data-pref="${k}" ${soundPrefs[k] !== false ? 'checked' : ''} />
     </label>`;
-  }).join('') + '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře.</div>';
+  }).join('') + '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře. „Bez návrhů klávesnice“ se projeví od příští hry.</div>';
 }
 
 function renderMenu(notice) {
@@ -940,6 +941,31 @@ function streakHtml() {
   return `<div class="streak-chip">🔥 Série: <b>${n}</b> ${n === 1 ? 'den' : (n < 5 ? 'dny' : 'dní')} v řadě${best > n ? ` · rekord ${best}` : ''}</div>`;
 }
 
+// Percentil a srovnání s ostatními hráči dne (počítá server, klient jen zobrazí).
+function loadDailyStats(wordCount) {
+  socket.emit('get_daily_stats', { wordCount, nickname: loadNickname() }, (st) => {
+    const el = document.getElementById('dailyStats');
+    if (!el || !st) return;
+    if (wordCount < 3) { el.innerHTML = ''; return; }
+    if (!st.enough) {
+      el.innerHTML = '<div class="dstat dstat-low">Zatím málo hráčů pro srovnání — vrať se později.</div>';
+      return;
+    }
+    const diff = Math.round((wordCount - st.avg) * 10) / 10;
+    const badge = diff >= 0 ? `<span class="dstat-badge up">+${diff} nad průměrem</span>` : `<span class="dstat-badge down">${diff} pod průměrem</span>`;
+    const bars = st.hist.map(b => `<div class="dstat-bar${b.me ? ' me' : ''}" title="${b.from}–${b.from + 4} slov: ${b.n} hráčů" style="height:${Math.max(6, Math.round(b.h * 100))}%"><span>${b.me ? 'Ty' : ''}</span></div>`).join('');
+    const week = st.week ? `<div class="dstat-week">Tvůj týdenní průměr <b>${st.week.mine}</b> · všichni <b>${st.week.all}</b></div>` : '';
+    el.innerHTML = `
+      <div class="dstat">
+        <div class="dstat-top">Porazil(a) jsi <b>${st.percentile} %</b> hráčů</div>
+        <div class="dstat-sub">${badge} · průměr ${st.avg} · medián ${st.median} · hrálo ${st.total}</div>
+        <div class="dstat-hist">${bars}</div>
+        <div class="dstat-axis"><span>${st.hist[0].from}</span><span>slov</span><span>${st.hist[st.hist.length - 1].from + 4}</span></div>
+        ${week}
+      </div>`;
+  });
+}
+
 function loadDailyLeaderboard(elId) {
   socket.emit('get_daily_leaderboard', (rows) => {
     const el = document.getElementById(elId);
@@ -1082,6 +1108,7 @@ function renderDailyResult(data, fromCache) {
       <div style="font-family:'Archivo Black','Space Grotesk',sans-serif; font-size:64px; color:var(--accent); margin:14px 0 0; line-height:1;">${data.wordCount}</div>
       <div style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:16px">SLOV ZA 180 SEKUND</div>
 
+      <div id="dailyStats"></div>
       ${streakHtml()}
       <div class="rules">
         <button type="button" class="rules-summary" data-panel="dailylb"><span class="ic">★</span><span>Žebříček dne</span><span class="chevron">›</span></button>
@@ -1109,6 +1136,7 @@ function renderDailyResult(data, fromCache) {
     };
   });
 
+  loadDailyStats(data.wordCount);
   loadDailyLeaderboard('dailyLbBody');
   // panel se rozbaluje podle výšky — po načtení žebříčku ji přepočítej
   setTimeout(() => { const p = document.getElementById('panel-dailylb'); if (p && p.previousElementSibling.classList.contains('open')) p.style.maxHeight = p.scrollHeight + 'px'; }, 500);
@@ -1385,7 +1413,7 @@ function wordInputHtml(placeholder) {
   return `
     <div class="word-input" id="wordInputRow">
       <div class="wi-field">
-        <input id="wordInput" placeholder="${placeholder}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" />
+        <input id="wordInput" name="dopisto-slovo" placeholder="${placeholder}" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-autocomplete="none" data-gramm="false" data-lpignore="true" data-form-type="other"${soundPrefs.nosuggest ? ' inputmode="email"' : ''} />
         <button type="button" class="wi-clear" id="clearBtn" aria-label="Smazat" hidden>⌫</button>
       </div>
       <button id="sendBtn">Odeslat</button>
@@ -1635,6 +1663,10 @@ function renderResult(data) {
 
       <div id="rematchBox" class="rematch-box"></div>
 
+      <div id="reportBox" class="report-box">
+        <button type="button" class="report-link" id="reportOpenBtn">⚑ Nahlásit hráče</button>
+      </div>
+
       <div class="menu-list" style="margin-top:20px">
         <button class="menu-item" id="againBtn"><span class="ic">🔎</span><span>Najít dalšího soupeře</span></button>
         <button class="secondary small" id="menuBtn" style="width:100%">Zpět do menu</button>
@@ -1663,6 +1695,8 @@ function renderResult(data) {
   }
   renderRematchBox();
 
+  bindReportBox(opp.name);
+
   document.getElementById('againBtn').onclick = () => {
     const n = game.myName;
     const mode = game.mode;
@@ -1673,6 +1707,50 @@ function renderResult(data) {
     renderSearching(n);
   };
   document.getElementById('menuBtn').onclick = () => { selectedMode = game.mode; leaveResult(); game = null; renderMenu(); };
+}
+
+// ==== Nahlášení hráče po zápase ====
+function bindReportBox(oppName) {
+  const box = document.getElementById('reportBox');
+  const openBtn = document.getElementById('reportOpenBtn');
+  if (!box || !openBtn) return;
+  const roomId = game.roomId;
+  openBtn.onclick = () => {
+    box.innerHTML = `
+      <div class="report-form">
+        <div class="report-title">Nahlásit hráče <b>${esc(oppName)}</b></div>
+        <div class="report-reasons">
+          <label><input type="radio" name="rr" value="cheating" checked> Podezření na cheating</label>
+          <label><input type="radio" name="rr" value="nick"> Nevhodná přezdívka</label>
+          <label><input type="radio" name="rr" value="behavior"> Chování</label>
+          <label><input type="radio" name="rr" value="other"> Jiný důvod</label>
+        </div>
+        <textarea id="reportNote" maxlength="300" rows="2" placeholder="Poznámka (nepovinné) — co tě na hře zarazilo?"></textarea>
+        <div class="report-msg" id="reportMsg"></div>
+        <div class="report-actions">
+          <button type="button" class="secondary small" id="reportCancel">Zrušit</button>
+          <button type="button" class="small" id="reportSend">Odeslat</button>
+        </div>
+      </div>`;
+    document.getElementById('reportCancel').onclick = () => {
+      box.innerHTML = '<button type="button" class="report-link" id="reportOpenBtn">⚑ Nahlásit hráče</button>';
+      bindReportBox(oppName);
+    };
+    document.getElementById('reportSend').onclick = () => {
+      const btn = document.getElementById('reportSend');
+      const msg = document.getElementById('reportMsg');
+      const reason = (document.querySelector('input[name="rr"]:checked') || {}).value;
+      btn.disabled = true;
+      socket.emit('report_player', { roomId, reason, note: document.getElementById('reportNote').value }, (res) => {
+        if (res && res.ok) {
+          box.innerHTML = '<div class="report-done">✓ Díky, hlášení bylo odesláno. Zápas prověříme.</div>';
+        } else {
+          btn.disabled = false;
+          msg.textContent = (res && res.message) || 'Odeslání se nepovedlo, zkus to znovu.';
+        }
+      });
+    };
+  };
 }
 
 // ==== Odveta ====

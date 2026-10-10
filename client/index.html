@@ -553,6 +553,31 @@
       scroll-behavior: auto !important;
     }
   }
+
+.dstat{margin:0 0 14px;padding:12px 14px;border:1px solid var(--border,#2a2a35);border-radius:12px;background:rgba(255,255,255,.03);text-align:center}
+.dstat-top{font-size:17px}.dstat-top b{color:var(--accent)}
+.dstat-sub{font-size:12px;color:var(--muted);margin-top:4px}
+.dstat-low{font-size:12px;color:var(--muted)}
+.dstat-badge{font-weight:700}.dstat-badge.up{color:#4ade80}.dstat-badge.down{color:var(--muted)}
+.dstat-hist{display:flex;align-items:flex-end;gap:3px;height:56px;margin:12px 4px 2px}
+.dstat-bar{flex:1;background:rgba(255,255,255,.18);border-radius:3px 3px 0 0;position:relative;min-width:6px}
+.dstat-bar.me{background:var(--accent)}
+.dstat-bar span{position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--accent);font-weight:700}
+.dstat-axis{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);padding:0 4px}
+.dstat-week{font-size:12px;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)}
+
+.report-box{margin-top:14px;text-align:center}
+.report-link{background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:6px 10px;text-decoration:underline;width:auto;box-shadow:none}
+.report-link:hover{color:var(--accent)}
+.report-form{text-align:left;padding:12px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(255,255,255,.03)}
+.report-title{font-size:13px;margin-bottom:8px}
+.report-reasons{display:flex;flex-direction:column;gap:6px;font-size:13px;margin-bottom:8px}
+.report-reasons label{display:flex;align-items:center;gap:8px;cursor:pointer}
+.report-form textarea{width:100%;box-sizing:border-box;resize:none;font:inherit;font-size:13px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.25);color:inherit}
+.report-msg{color:#f87171;font-size:12px;min-height:16px;margin-top:4px}
+.report-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.report-actions button{width:auto;padding:8px 16px}
+.report-done{font-size:13px;color:#4ade80;padding:8px}
 </style>
 </head>
 <body>
@@ -560,6 +585,6 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="site-config.js"></script>
-<script src="app.js?v=20261010b"></script>
+<script src="app.js?v=20261010e"></script>
 </body>
 </html>

@@ -72,6 +72,43 @@ function dailyLeaderboard(limit = 20) {
   return Object.values(today).sort((a, b) => b.count - a.count).slice(0, limit);
 }
 
+// Statistiky dne: percentil, medián, průměr a rozložení. Počítají se jen
+// dokončené pokusy (aspoň MIN_WORDS slov), ať průměr nestrhávají okamžitě ukončené hry.
+const MIN_WORDS = 3, MIN_PLAYERS = 5;
+function dailyStats(nickname, wordCount) {
+  const daily = db.daily || {};
+  const today = Object.values(daily[utcDateKey()] || {}).map(e => e.count).filter(c => c >= MIN_WORDS).sort((a, b) => a - b);
+  const out = { total: today.length, enough: today.length >= MIN_PLAYERS };
+  if (out.enough) {
+    const below = today.filter(c => c < wordCount).length;
+    const equal = today.filter(c => c === wordCount).length;
+    out.percentile = Math.max(1, Math.min(99, Math.round(((below + equal / 2) / today.length) * 100)));
+    out.avg = Math.round((today.reduce((a, b) => a + b, 0) / today.length) * 10) / 10;
+    const m = today.length >> 1;
+    out.median = today.length % 2 ? today[m] : Math.round(((today[m - 1] + today[m]) / 2) * 10) / 10;
+    const bins = {};
+    today.forEach(c => { const b = Math.floor(c / 5) * 5; bins[b] = (bins[b] || 0) + 1; });
+    const myBin = Math.floor(wordCount / 5) * 5;
+    const max = Math.max(...Object.values(bins), 1);
+    const keys = Object.keys(bins).map(Number);
+    const lo = Math.min(...keys, myBin), hi = Math.max(...keys, myBin);
+    out.hist = [];
+    for (let b = lo; b <= hi; b += 5) out.hist.push({ from: b, n: bins[b] || 0, h: (bins[b] || 0) / max, me: b === myBin });
+  }
+  // týden: tvůj průměr vs. průměr všech (jen dokončené pokusy)
+  const k = key(nickname || '');
+  let all = [], mine = [];
+  Object.values(daily).forEach(day => Object.entries(day).forEach(([kk, e]) => {
+    if (e.count < MIN_WORDS) return;
+    all.push(e.count); if (kk === k) mine.push(e.count);
+  }));
+  if (mine.length >= 2 && all.length >= MIN_PLAYERS) {
+    const av = a => Math.round((a.reduce((x, y) => x + y, 0) / a.length) * 10) / 10;
+    out.week = { mine: av(mine), all: av(all), days: mine.length };
+  }
+  return out;
+}
+
 // ==== Hlášení chyb / nahlášení hráčů (soubor reports.json, max 500 záznamů) ====
 const REPORTS_FILE = path.join(__dirname, 'data', 'reports.json');
 function addReport(r) {
@@ -81,4 +118,4 @@ function addReport(r) {
   fs.writeFileSync(REPORTS_FILE, JSON.stringify(list.slice(-500), null, 1));
 }
 
-module.exports = { addReport, getProfile, recordResult, leaderboard, recordDaily, dailyLeaderboard };
+module.exports = { addReport, getProfile, recordResult, leaderboard, recordDaily, dailyLeaderboard, dailyStats };
