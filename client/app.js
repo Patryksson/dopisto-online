@@ -1468,11 +1468,13 @@ function bindWordInputExtras(wordInput) {
 
 // ==== Vlastní klávesnice (mobil / tablet) ====
 // Systémová klávesnice se neotevře (inputmode="none"), místo ní je dole česká
-// QWERTZ klávesnice. Diakritika se píše jako na iPhonu: nejdřív písmeno, potom
+// QWERTZ klávesnice. Nahoře je řada nejčastější diakritiky (jedno klepnutí).
+// Diakritika jde psát i jako na iPhonu: nejdřív písmeno, potom
 // klávesa ˇ nebo ´ vpravo ho změní (c → č, a → á, u → ú → ů). Opakovaným
 // stiskem se změna vrací. Podržením písmene se dají vybrat i varianty.
 // Celé buňky jsou cílové oblasti (žádné mrtvé mezery mezi klávesami).
 const VK_ALTS = { a: ['á'], c: ['č'], d: ['ď'], e: ['é', 'ě'], i: ['í'], n: ['ň'], o: ['ó'], r: ['ř'], s: ['š'], t: ['ť'], u: ['ú', 'ů'], y: ['ý'], z: ['ž'] };
+const VK_DIA = ['á', 'č', 'é', 'ě', 'í', 'ř', 'š', 'ý', 'ž', 'ů', 'ú'];
 const VK_CARKA = { a: 'á', e: 'é', i: 'í', o: 'ó', u: 'ú', y: 'ý', 'ú': 'ů', 'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ý': 'y', 'ů': 'u' };
 const VK_HACEK = { c: 'č', d: 'ď', e: 'ě', n: 'ň', r: 'ř', s: 'š', t: 'ť', z: 'ž', 'č': 'c', 'ď': 'd', 'ě': 'e', 'ň': 'n', 'ř': 'r', 'š': 's', 'ť': 't', 'ž': 'z' };
 const VK_LONG_MS = 320;
@@ -1515,6 +1517,7 @@ function mountVK(input) {
   vkEl.id = 'vk';
   vkEl.innerHTML = `
     <div class="vk-rows">
+      <div class="vk-row vk-dia">${VK_DIA.map(c => `<button type="button" class="vk-key" data-k="${c}"><span class="vk-cap">${c}</span></button>`).join('')}</div>
       <div class="vk-row">${'qwertzuiop'.split('').map(vkKeyHtml).join('')}</div>
       <div class="vk-row vk-row2">${'asdfghjkl'.split('').map(vkKeyHtml).join('')}</div>
       <div class="vk-row">
