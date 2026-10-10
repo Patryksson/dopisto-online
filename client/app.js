@@ -25,6 +25,11 @@ function patternInputPlaceholder(pattern) {
   return `Napiš slovo na '${pattern.value}'…`;
 }
 
+// U zadání "začíná na…" se pole po odeslání samo vyplní zadanými písmeny.
+function patternPrefill(pattern) {
+  return soundPrefs.prefill !== false && pattern && pattern.type !== 'infix2' ? String(pattern.value || '').toLowerCase() : '';
+}
+
 function currentInstructionText() { return patternInstruction(game.pattern); }
 function currentPlaceholder() { return patternInputPlaceholder(game.pattern); }
 
@@ -120,9 +125,10 @@ const SOUND_PREFS_INFO = {
   penalty: { icon: '⚠️', label: 'Penalizace',    desc: 'Varovný zvuk při chybě a ztrátě času' },
   results: { icon: '🏆', label: 'Výhra / prohra', desc: 'Fanfára nebo smutný tón na konci hry' },
   vibrate: { icon: '📳', label: 'Vibrace',       desc: 'Jemné vibrace na mobilu (chyba, tvůj tah, konec)' },
+  prefill: { icon: '✏️', label: 'Předvyplnit zadání', desc: 'Po odeslání se do pole samo vrátí zadané písmeno nebo dvojice' },
   vkeyboard: { icon: '⌨️', label: 'Vlastní klávesnice', desc: 'Česká klávesnice přímo ve hře, bez návrhů slov (jen mobil a tablet)' },
 };
-let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true, vkeyboard: true };
+let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true, prefill: true, vkeyboard: true };
 try { Object.assign(soundPrefs, JSON.parse(localStorage.getItem('dopisto_sound_prefs') || '{}')); } catch {}
 function saveSoundPrefs() { try { localStorage.setItem('dopisto_sound_prefs', JSON.stringify(soundPrefs)); } catch {} }
 function soundOn(cat) { return soundEnabled && soundPrefs[cat] !== false; }
@@ -449,7 +455,7 @@ function settingsHtml() {
       <span class="setting-text"><b>${i.label}</b><small>${i.desc}</small></span>
       <input type="checkbox" class="switch" data-pref="${k}" ${soundPrefs[k] !== false ? 'checked' : ''} />
     </label>`;
-  }).join('') + '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře. „Vlastní klávesnice“ se projeví od příští hry.</div>';
+  }).join('') + '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře. „Vlastní klávesnice“ a „Předvyplnit zadání“ se projeví od příští hry.</div>';
 }
 
 function renderMenu(notice) {
@@ -1075,12 +1081,17 @@ function renderDailyGame() {
       (banner || wordInput).scrollIntoView({ block: 'center', behavior: 'smooth' });
     }, 300);
   });
+  const prefill = patternPrefill(dailyState.pattern);
+  wordInput.dataset.prefill = prefill;
+  wordInput.value = prefill;
+  wordInput.dispatchEvent(new Event('input', { bubbles: true }));
   wordInput.focus();
 
   function sendDailyWord() {
     const word = wordInput.value.trim();
-    if (!word) return;
-    wordInput.value = '';
+    if (!word || word === prefill) return;
+    wordInput.value = prefill;
+    wordInput.dispatchEvent(new Event('input', { bubbles: true }));
     socket.emit('submit_daily_word', { word });
     wordInput.focus();
   }
@@ -1427,9 +1438,10 @@ function bindWordInputExtras(wordInput) {
   const keepFocus = (el) => { if (el) el.addEventListener('pointerdown', e => e.preventDefault()); };
   const clearBtn = document.getElementById('clearBtn');
   keepFocus(clearBtn); keepFocus(document.getElementById('sendBtn'));
-  const sync = () => { if (clearBtn) clearBtn.hidden = !wordInput.value; };
+  const pre = () => wordInput.dataset.prefill || '';
+  const sync = () => { if (clearBtn) clearBtn.hidden = !wordInput.value || wordInput.value === pre(); };
   wordInput.addEventListener('input', sync);
-  if (clearBtn) clearBtn.onclick = () => { wordInput.value = ''; sync(); wordInput.focus(); playClick(); };
+  if (clearBtn) clearBtn.onclick = () => { wordInput.value = pre(); sync(); wordInput.focus(); playClick(); };
   wordInput.addEventListener('input', () => {
     const hint = document.getElementById('gameErr');
     if (hint) hint.textContent = '';
@@ -1557,7 +1569,6 @@ function mountVK(input) {
     const k = key.dataset.k;
     key.classList.add('down');
     vibrate(8);
-    if (k !== 'send') playClick();
     if (k === 'back') {
       back();
       repeatT = setTimeout(() => { repeatI = setInterval(back, 70); }, 380);
@@ -1688,6 +1699,10 @@ function renderGame() {
     }, 300);
   });
 
+  const prefill = patternPrefill(game.pattern);
+  wordInput.dataset.prefill = prefill;
+  wordInput.value = prefill;
+  wordInput.dispatchEvent(new Event('input', { bubbles: true }));
   wordInput.focus();
 
   document.getElementById('giveUpBtn').onclick = () => {
@@ -1698,9 +1713,10 @@ function renderGame() {
 
   function sendWord() {
     const word = wordInput.value.trim();
-    if (!word) return;
+    if (!word || word === prefill) return;
     if (game.turn !== game.youAre) { inputFeedback('bad', 'Teď je na tahu soupeř.'); return; }
-    wordInput.value = '';
+    wordInput.value = prefill;
+    wordInput.dispatchEvent(new Event('input', { bubbles: true }));
     socket.emit('submit_word', { roomId: game.roomId, word });
     wordInput.focus(); // klávesnice na mobilu zůstane otevřená
   }
@@ -2294,6 +2310,7 @@ routeFromHash();
 
 // Zvukový klik na jakékoliv tlačítko nebo rozbalovací odkaz.
 document.addEventListener('click', (e) => {
+  if (e.target.closest('.vk')) return; // klávesnice je tichá
   if (e.target.closest('button, summary')) playClick();
 }, true);
 
