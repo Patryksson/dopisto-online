@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { isValidWord, generatePattern, matchesPattern, patternInstruction, acceptableStartLetters, matchesRequiredLetter, dailyPattern } = require('./dictionary');
+const { customPattern, isValidWord, generatePattern, matchesPattern, patternInstruction, acceptableStartLetters, matchesRequiredLetter, dailyPattern } = require('./dictionary');
 const store = require('./store');
 const { sanitizeNickname, cleanWord, attachSocketGuard } = require('./security');
 const { dailyBonusForDate, checkDailyBonus, publicBonus, DAILY_BONUS_EXTRA_MS } = require('./dailyBonus');
@@ -145,10 +145,19 @@ function setupGame(io, socket) {
     removeFromQueues(socket);
   });
 
-  socket.on('create_lobby', ({ nickname, mode }) => {
+  socket.on('create_lobby', ({ nickname, mode, pattern }) => {
     if (!MODES.includes(mode)) return;
     const nick = acceptNickname(nickname);
     if (!nick) return;
+    // Volitelné vlastní zadání (jen dvojice písmen v režimech 2 písmena a Uprostřed)
+    let custom = null;
+    if (typeof pattern === 'string' && pattern.trim()) {
+      custom = customPattern(mode, pattern);
+      if (!custom) {
+        socket.emit('lobby_error', { message: 'Tato kombinace písmen není v seznamu povolených dvojic. Zkus jinou, nebo nech pole prázdné pro náhodné zadání.' });
+        return;
+      }
+    }
     socket.data.nickname = nick;
     removeLobbyFor(socket);
 
@@ -160,9 +169,9 @@ function setupGame(io, socket) {
         socket.emit('lobby_expired');
       }
     }, 10 * 60 * 1000);
-    lobbies.set(code, { socket, nickname: socket.data.nickname, elo, mode, timeout });
+    lobbies.set(code, { socket, nickname: socket.data.nickname, elo, mode, timeout, custom });
     socket.data.lobbyCode = code;
-    socket.emit('lobby_created', { code });
+    socket.emit('lobby_created', { code, pattern: custom ? custom.value : null });
   });
 
   socket.on('cancel_lobby', () => removeLobbyFor(socket));
@@ -189,7 +198,9 @@ function setupGame(io, socket) {
       io,
       { socket: entry.socket, nickname: entry.nickname, elo: entry.elo },
       { socket, nickname: socket.data.nickname, elo: joinerElo },
-      entry.mode
+      entry.mode,
+      undefined,
+      entry.custom
     );
   });
 
@@ -497,7 +508,8 @@ function setupGame(io, socket) {
       { socket: a.socket, nickname: a.nickname, elo: store.getProfile(r.mode, a.nickname).elo },
       { socket: b.socket, nickname: b.nickname, elo: store.getProfile(r.mode, b.nickname).elo },
       r.mode,
-      r.starter != null ? r.players[1 - r.starter].nickname : undefined
+      r.starter != null ? r.players[1 - r.starter].nickname : undefined,
+      r.custom
     );
   });
 
@@ -590,12 +602,12 @@ function finishDaily(socket, session) {
   dailySessions.delete(socket.id);
 }
 
-function startMatch(io, a, b, mode, firstNickname) {
+function startMatch(io, a, b, mode, firstNickname, forcedPattern) {
   const roomId = 'room_' + Math.random().toString(36).slice(2, 10);
   // Nový zápas: první tah losuje se 50/50. Odveta: začíná ten, kdo minule nezačínal.
   const turnStart = firstNickname === b.nickname ? 1 : firstNickname === a.nickname ? 0 : (Math.random() < 0.5 ? 0 : 1);
 
-  const pattern = generatePattern(mode);
+  const pattern = forcedPattern || generatePattern(mode);
   const bank = BANK_TIME_BY_MODE[mode];
   const timeLeft = [bank, bank];
   const turnTimer = mode === 'speed' ? TURN_TIME_MS : null;
@@ -619,6 +631,7 @@ function startMatch(io, a, b, mode, firstNickname) {
     intervalId: null,
     pendingDisconnect: null,
     dailyBonus: dailyBonusForDate(),
+    custom: forcedPattern || null,
   };
   rooms.set(roomId, room);
 
@@ -741,6 +754,7 @@ function endRoom(io, room, winnerIdx, reason) {
   rematches.set(room.id, {
     mode: room.mode,
     starter: room.turnStart,
+    custom: room.custom,
     players: room.players.map(p => ({ socket: p.socket, nickname: p.nickname })),
     left: [false, false],
     pending: null,

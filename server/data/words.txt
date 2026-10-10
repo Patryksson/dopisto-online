@@ -242813,6 +242813,7 @@ zživotnění
 čestlický
 čestmír
 čestnáctikolový
+čestnost
 čestný
 čestnější
 čestín
@@ -242836,6 +242837,7 @@ zživotnění
 četka
 četnický
 četnictvo
+četnost
 četnostní
 četník
 četný

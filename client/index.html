@@ -153,7 +153,7 @@
   .dc-bonus .daily-bonus-desc { margin:2px 0 0; }
   .daily-card .menu-list { margin-bottom:4px; }
   .daily-card .streak-chip { margin:6px 0 4px; }
-  .back-link { all:unset; cursor:pointer; position:absolute; top:18px; left:16px; font-size:13px; color:var(--muted); letter-spacing:.06em; padding:6px 4px; }
+  .back-link { all:unset; cursor:pointer; display:inline-block; position:static; margin:0 0 2px -4px; font-size:13px; color:var(--muted); letter-spacing:.06em; padding:8px 6px; }
   .back-link:hover { color:#fff; }
   .play-title { text-align:center; font-size:20px; letter-spacing:4px; margin:6px 0 10px; }
   /* ---- Herní obrazovka: hierarchie ---- */
@@ -586,25 +586,69 @@
 .report-done{font-size:13px;color:#4ade80;padding:8px}
 
 /* Vlastní klávesnice */
-body.has-vk{padding-bottom:calc(var(--vk-h,230px) + 8px)}
+body{transition:padding-bottom .3s cubic-bezier(.22,.9,.3,1)}
+body.has-vk{padding-bottom:calc(var(--vk-h,250px) + 8px)}
 body.has-vk .word-input #sendBtn{display:none}
-body.has-vk #wordInputRow{scroll-margin-bottom:calc(var(--vk-h,230px) + 10px)}
+body.has-vk #wordInputRow{scroll-margin-bottom:calc(var(--vk-h,250px) + 10px)}
 body.has-vk .wi-field input{caret-color:var(--accent)}
-.vk{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#12121a;border-top:1px solid var(--line);padding:8px 4px calc(8px + env(safe-area-inset-bottom));touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;box-shadow:0 -8px 24px rgba(0,0,0,.45)}
-.vk-rows{position:relative;max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
-.vk-row{display:flex;gap:4px;justify-content:center}
-.vk-row2{padding:0 4.5%}
-.vk-key{position:relative;flex:1 1 0;min-width:0;height:46px;padding:0;margin:0;width:auto;border:none;border-radius:8px;background:#242432;color:var(--ink,#fff);font-weight:600;font-size:19px;line-height:1;font-family:inherit;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 0 rgba(0,0,0,.45);-webkit-tap-highlight-color:transparent;text-transform:none}
-.vk-key i{position:absolute;top:3px;right:4px;font-style:normal;font-size:9px;font-weight:500;color:var(--muted);letter-spacing:0}
-.vk-key.down{background:#34344a;transform:translateY(1px);box-shadow:none}
-.vk-mod{flex:.9 1 0;font-size:22px;color:var(--accent)}
-.vk-mod.on{background:var(--accent);color:#fff}
-.vk-back{flex:1.5 1 0;font-size:20px}
-.vk-send{flex:1;height:48px;background:var(--accent);color:#fff;font-size:16px;letter-spacing:.5px;text-transform:uppercase}
-.vk-send.down{background:#d62f2f}
+.vk{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#12121a;border-top:1px solid var(--line);padding:6px 2px calc(6px + env(safe-area-inset-bottom));touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;box-shadow:0 -8px 24px rgba(0,0,0,.45);animation:vkIn .32s cubic-bezier(.22,.9,.3,1) both}
+.vk.out{animation:vkOut .2s ease-in both;pointer-events:none}
+@keyframes vkIn{from{transform:translateY(100%)}to{transform:none}}
+@keyframes vkOut{from{transform:none}to{transform:translateY(100%)}}
+@media (prefers-reduced-motion:reduce){.vk,.vk.out{animation:none}body{transition:none}}
+.vk-rows{position:relative;max-width:560px;margin:0 auto;display:flex;flex-direction:column}
+.vk-row{display:flex}
+.vk-row2{padding:0 5%}
+/* celá buňka je cílová oblast; vzhled klávesy je vložený uvnitř */
+.vk-key{position:relative;flex:1 1 0;min-width:0;height:48px;padding:0;margin:0;width:auto;border:none;border-radius:0;background:transparent;box-shadow:none;color:var(--ink,#fff);-webkit-tap-highlight-color:transparent;text-transform:none;font-family:inherit}
+.vk-cap{position:absolute;inset:3px 2px;border-radius:8px;background:#242432;box-shadow:0 2px 0 rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:19px;line-height:1;transition:background .06s}
+.vk-cap i{position:absolute;top:3px;right:4px;font-style:normal;font-size:9px;font-weight:500;color:var(--muted);letter-spacing:0}
+.vk-key.down .vk-cap{background:#3c3c55;transform:translateY(1px);box-shadow:none}
+.vk-dia .vk-key{height:44px}
+.vk-dia .vk-cap{background:#2e1c20;color:#ff6b6b;font-size:18px}
+.vk-dia .vk-key.down .vk-cap{background:#4a2630}
+.vk-acc{flex:1.05 1 0}
+.vk-acc .vk-cap{background:#2e1c20;color:#ff6b6b;font-size:24px;transition:opacity .12s}
+.vk-acc.dim .vk-cap{opacity:.38}
+.vk-acc.down .vk-cap{background:#4a2630}
+.vk-back{flex:1.4 1 0}
+.vk-back .vk-cap{font-size:20px}
+.vk-send{flex:1;height:52px}
+.vk-send .vk-cap{background:var(--accent);color:#fff;font-size:16px;letter-spacing:.5px;text-transform:uppercase;box-shadow:none}
+.vk-send.down .vk-cap{background:#d62f2f}
 .vk-pop{position:absolute;z-index:60;display:flex;gap:4px;padding:6px;background:#2c2c3e;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.6);border:1px solid var(--line)}
 .vk-alt{min-width:42px;height:48px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600;border-radius:8px;color:var(--ink,#fff)}
 .vk-alt.hot{background:var(--accent);color:#fff}
+
+.custom-pat{margin:10px 0 16px;text-align:left}
+.custom-pat label{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.custom-pat label small{text-transform:none;letter-spacing:0}
+.custom-pat input{width:100%;box-sizing:border-box;text-align:center;font-size:22px;letter-spacing:6px;text-transform:uppercase;padding:10px 12px}
+.custom-pat-hint{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* Nahlášení hráče */
+.report-icon{position:absolute;top:12px;right:12px;width:30px;height:30px;padding:0;margin:0;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);font-weight:800;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:none;cursor:pointer;z-index:2}
+.report-icon:hover{color:var(--accent);border-color:var(--accent)}
+.report-icon.done{color:#4ade80;border-color:rgba(74,222,128,.4);cursor:default}
+.rp-overlay{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.65);display:flex;align-items:flex-end;justify-content:center;animation:rpFade .2s ease both}
+.rp-sheet{width:100%;max-width:480px;box-sizing:border-box;background:#14141c;border:1px solid var(--line);border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));animation:rpUp .28s cubic-bezier(.22,.9,.3,1) both}
+@media (min-width:560px){.rp-overlay{align-items:center}.rp-sheet{border-radius:18px}}
+@keyframes rpFade{from{opacity:0}to{opacity:1}}
+@keyframes rpUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.rp-head{display:flex;justify-content:space-between;align-items:center;font-size:15px;margin-bottom:2px}
+.rp-head b{color:var(--accent)}
+.rp-x{width:32px;height:32px;padding:0;margin:0;background:none;border:none;box-shadow:none;color:var(--muted);font-size:16px;cursor:pointer}
+.rp-sub{font-size:12px;color:var(--muted);margin:2px 0 10px}
+.rp-reasons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.rp-chip{display:flex;align-items:center;gap:8px;padding:12px 10px;margin:0;width:auto;text-align:left;font-size:13px;line-height:1.2;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--ink,#fff);box-shadow:none;cursor:pointer}
+.rp-chip .rp-ic{font-size:18px;flex:0 0 auto}
+.rp-chip.on{border-color:var(--accent);background:rgba(255,59,59,.14)}
+.rp-sheet textarea{width:100%;box-sizing:border-box;resize:none;font:inherit;font-size:13px;padding:10px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.25);color:inherit}
+.rp-msg{color:#f87171;font-size:12px;min-height:16px;margin:4px 0}
+.rp-send{width:100%;margin:0;padding:13px}
+.rp-send:disabled{opacity:.45}
+.rp-done{text-align:center;padding:18px 6px;color:#4ade80;font-size:15px}
+.rp-done small{display:block;color:var(--muted);margin-top:4px;font-size:12px}
 </style>
 </head>
 <body>
@@ -612,6 +656,6 @@ body.has-vk .wi-field input{caret-color:var(--accent)}
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="site-config.js"></script>
-<script src="app.js?v=20261010i"></script>
+<script src="app.js?v=20261011e"></script>
 </body>
 </html>

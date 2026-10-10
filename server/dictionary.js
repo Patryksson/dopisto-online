@@ -119,7 +119,16 @@ function dailyPattern(date = new Date()) {
   return { type: 'prefix2', value: dailyCycle(c)[dayIndex % n] };
 }
 
+// Vlastní dvojice pro soukromé lobby: jen z ověřeného seznamu (ke každé existují slova).
+function customPattern(mode, raw) {
+  if (typeof raw !== 'string') return null;
+  const v = raw.normalize('NFC').trim().toLowerCase();
+  if (mode === 2 && VALID_PREFIXES.includes(v)) return { type: 'prefix2', value: v };
+  if (mode === 'middle' && VALID_INFIX2.includes(v)) return { type: 'infix2', value: v };
+  return null;
+}
+
 module.exports = {
-  isValidWord, generatePattern, matchesPattern, patternInstruction,
+  customPattern, isValidWord, generatePattern, matchesPattern, patternInstruction,
   acceptableStartLetters, matchesRequiredLetter, dailyPattern,
 };

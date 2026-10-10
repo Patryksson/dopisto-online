@@ -499,7 +499,7 @@ function renderMenu(notice) {
       </div>
 
       <div class="rules">
-        <button type="button" class="rules-summary" data-panel="p3"><span class="ic">🔊</span><span>Zvuky a vibrace</span><span class="chevron">›</span></button>
+        <button type="button" class="rules-summary" data-panel="p3"><span class="ic">⚙️</span><span>Nastavení</span><span class="chevron">›</span></button>
         <div class="rules-panel" id="panel-p3"><div class="rules-body" id="settingsBody">${settingsHtml()}</div></div>
       </div>
     </div>
@@ -596,6 +596,11 @@ function renderPlayMenu(notice) {
       <div class="menu-list">
         <button class="menu-item" id="createLobbyBtn"><span class="ic">＋</span><span>Vytvořit lobby</span></button>
       </div>
+      <div class="custom-pat" id="customPatRow" hidden>
+        <label for="customPat">Vlastní zadání <small>(nepovinné)</small></label>
+        <input id="customPat" maxlength="2" placeholder="např. úč" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" />
+        <div class="custom-pat-hint">Dvě písmena, na která budete hrát. Prázdné pole = náhodné zadání.</div>
+      </div>
       <div class="lobby-row">
         <div class="code-boxes" id="joinCodeBoxes">
           ${[0, 1, 2, 3, 4].map(i => `<input class="code-box" data-idx="${i}" maxlength="1" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" inputmode="text" />`).join('')}
@@ -608,7 +613,12 @@ function renderPlayMenu(notice) {
 
   document.getElementById('soundBtn').onclick = toggleSound;
   document.getElementById('playBackBtn').onclick = () => renderMenu();
-  bindModeSegmented(() => selectedMode, (newMode) => { selectedMode = newMode; });
+  const updateCustomPat = () => {
+    const row = document.getElementById('customPatRow');
+    if (row) row.hidden = !(selectedMode === 2 || selectedMode === 'middle');
+  };
+  bindModeSegmented(() => selectedMode, (newMode) => { selectedMode = newMode; updateCustomPat(); });
+  updateCustomPat();
 
   document.getElementById('findBtn').onclick = () => {
     const n = requireNick(); if (!n) return;
@@ -620,7 +630,15 @@ function renderPlayMenu(notice) {
   document.getElementById('createLobbyBtn').onclick = () => {
     const n = requireNick(); if (!n) return;
     ensureAudioCtx();
-    socket.emit('create_lobby', { nickname: n, mode: selectedMode });
+    let pattern = '';
+    if (selectedMode === 2 || selectedMode === 'middle') {
+      pattern = (document.getElementById('customPat').value || '').trim().toLowerCase();
+      if (pattern && [...pattern].length !== 2) {
+        document.getElementById('err').textContent = 'Vlastní zadání musí mít přesně dvě písmena.';
+        return;
+      }
+    }
+    socket.emit('create_lobby', { nickname: n, mode: selectedMode, pattern });
     renderLobbyWaiting();
   };
 
@@ -1283,7 +1301,7 @@ function shareDailyResult(data) {
 function renderSearching(nickname) {
   app.innerHTML = `
     <div class="card" style="text-align:center">
-      <p style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:0">Režim: ${MODE_LABEL[selectedMode]}</p>
+      <p style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:0">Režim: ${MODE_LABEL[selectedMode]}<span id="lobbyPatLine"></span></p>
       <div class="spinner"></div>
       <p style="color:var(--ink-soft); font-size:13px">Hledám soupeře…</p>
       <button class="secondary small" id="cancelBtn" style="width:100%; margin-top:10px">Zrušit</button>
@@ -1450,12 +1468,15 @@ function bindWordInputExtras(wordInput) {
 
 // ==== Vlastní klávesnice (mobil / tablet) ====
 // Systémová klávesnice se neotevře (inputmode="none"), místo ní je dole česká
-// QWERTZ klávesnice. Háčky a čárky: podržením písmene, nebo mrtvými klávesami ˇ a ´.
+// QWERTZ klávesnice. Diakritika se píše jako na iPhonu: nejdřív písmeno, potom
+// klávesa ˇ nebo ´ vpravo ho změní (c → č, a → á, u → ú → ů). Opakovaným
+// stiskem se změna vrací. Podržením písmene se dají vybrat i varianty.
+// Celé buňky jsou cílové oblasti (žádné mrtvé mezery mezi klávesami).
 const VK_ALTS = { a: ['á'], c: ['č'], d: ['ď'], e: ['é', 'ě'], i: ['í'], n: ['ň'], o: ['ó'], r: ['ř'], s: ['š'], t: ['ť'], u: ['ú', 'ů'], y: ['ý'], z: ['ž'] };
-const VK_HACEK = { c: 'č', d: 'ď', e: 'ě', n: 'ň', r: 'ř', s: 'š', t: 'ť', z: 'ž' };
-const VK_CARKA = { a: 'á', e: 'é', i: 'í', o: 'ó', u: 'ú', y: 'ý' };
+const VK_CARKA = { a: 'á', e: 'é', i: 'í', o: 'ó', u: 'ú', y: 'ý', 'ú': 'ů', 'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ý': 'y', 'ů': 'u' };
+const VK_HACEK = { c: 'č', d: 'ď', e: 'ě', n: 'ň', r: 'ř', s: 'š', t: 'ť', z: 'ž', 'č': 'c', 'ď': 'd', 'ě': 'e', 'ň': 'n', 'ř': 'r', 'š': 's', 'ť': 't', 'ž': 'z' };
 const VK_LONG_MS = 320;
-let vkEl = null, vkObserver = null, vkInput = null, vkDead = null, vkAbort = null;
+let vkEl = null, vkObserver = null, vkInput = null, vkAbort = null;
 
 function useVK() {
   if (soundPrefs.vkeyboard === false) return false;
@@ -1465,17 +1486,23 @@ function useVK() {
   } catch { return false; }
 }
 
-function unmountVK() {
+function unmountVK(animate) {
   if (vkAbort) { vkAbort.abort(); vkAbort = null; }
   if (vkObserver) { vkObserver.disconnect(); vkObserver = null; }
-  if (vkEl) { vkEl.remove(); vkEl = null; }
-  vkInput = null; vkDead = null;
+  const el = vkEl;
+  vkEl = null; vkInput = null;
+  if (el) {
+    let reduced = false;
+    try { reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch {}
+    if (animate && !reduced) { el.classList.add('out'); setTimeout(() => el.remove(), 220); }
+    else el.remove();
+  }
   document.body.classList.remove('has-vk');
 }
 
 function vkKeyHtml(k) {
   const alts = VK_ALTS[k];
-  return `<button type="button" class="vk-key" data-k="${k}">${k}${alts ? `<i>${alts.join('')}</i>` : ''}</button>`;
+  return `<button type="button" class="vk-key" data-k="${k}"><span class="vk-cap">${k}${alts ? `<i>${alts.join('')}</i>` : ''}</span></button>`;
 }
 
 function mountVK(input) {
@@ -1491,16 +1518,16 @@ function mountVK(input) {
       <div class="vk-row">${'qwertzuiop'.split('').map(vkKeyHtml).join('')}</div>
       <div class="vk-row vk-row2">${'asdfghjkl'.split('').map(vkKeyHtml).join('')}</div>
       <div class="vk-row">
-        <button type="button" class="vk-key vk-mod" data-k="hacek" aria-label="Háček">ˇ</button>
-        <button type="button" class="vk-key vk-mod" data-k="carka" aria-label="Čárka">´</button>
         ${'yxcvbnm'.split('').map(vkKeyHtml).join('')}
-        <button type="button" class="vk-key vk-back" data-k="back" aria-label="Smazat">⌫</button>
+        <button type="button" class="vk-key vk-acc" data-k="hacek" aria-label="Háček"><span class="vk-cap">ˇ</span></button>
+        <button type="button" class="vk-key vk-acc" data-k="carka" aria-label="Čárka"><span class="vk-cap">´</span></button>
+        <button type="button" class="vk-key vk-back" data-k="back" aria-label="Smazat"><span class="vk-cap">⌫</span></button>
       </div>
-      <div class="vk-row"><button type="button" class="vk-key vk-send" data-k="send">Odeslat</button></div>
+      <div class="vk-row"><button type="button" class="vk-key vk-send" data-k="send"><span class="vk-cap">Odeslat</span></button></div>
     </div>`;
   document.body.appendChild(vkEl);
   document.body.classList.add('has-vk');
-  const setH = () => document.documentElement.style.setProperty('--vk-h', (vkEl ? vkEl.offsetHeight : 230) + 'px');
+  const setH = () => document.documentElement.style.setProperty('--vk-h', (vkEl ? vkEl.offsetHeight : 250) + 'px');
   setH();
   requestAnimationFrame(() => {
     setH();
@@ -1511,32 +1538,36 @@ function mountVK(input) {
   // klávesnice zmizí, jakmile obrazovka s polem pro slovo zmizí
   const appEl = document.getElementById('app');
   if (appEl && window.MutationObserver) {
-    vkObserver = new MutationObserver(() => { if (!document.getElementById('wordInput')) unmountVK(); });
+    vkObserver = new MutationObserver(() => { if (!document.getElementById('wordInput')) unmountVK(true); });
     vkObserver.observe(appEl, { childList: true });
   }
 
   const rows = vkEl.querySelector('.vk-rows');
   let press = null, repeatT = null, repeatI = null;
 
-  function setDead(kind) {
-    vkDead = kind;
-    vkEl.querySelectorAll('.vk-mod').forEach(b => b.classList.toggle('on', b.dataset.k === kind));
+  function accMap(kind) { return kind === 'hacek' ? VK_HACEK : VK_CARKA; }
+  function updateAcc() {
+    const last = vkInput.value.slice(-1);
+    vkEl.querySelectorAll('.vk-acc').forEach(b => b.classList.toggle('dim', !accMap(b.dataset.k)[last]));
+  }
+  function applyAccent(kind) {
+    const v = vkInput.value;
+    const to = accMap(kind)[v.slice(-1)];
+    if (!to) return;
+    vkInput.value = v.slice(0, -1) + to;
+    changed();
   }
   function changed() {
     vkInput.dispatchEvent(new Event('input', { bubbles: true }));
     vkInput.scrollLeft = vkInput.scrollWidth;
+    updateAcc();
   }
+  updateAcc();
+  vkInput.addEventListener('input', updateAcc, sig);
   function insert(ch) {
     if (vkInput.value.length >= 40) return;
     vkInput.value += ch;
     changed();
-  }
-  function typeLetter(k) {
-    let ch = k;
-    if (vkDead === 'hacek' && VK_HACEK[k]) ch = VK_HACEK[k];
-    else if (vkDead === 'carka' && VK_CARKA[k]) ch = VK_CARKA[k];
-    setDead(null);
-    insert(ch);
   }
   function back() {
     if (!vkInput.value) return;
@@ -1557,30 +1588,34 @@ function mountVK(input) {
     let left = key.offsetLeft + key.offsetWidth / 2 - w / 2;
     left = Math.max(0, Math.min(left, rows.clientWidth - w));
     pop.style.left = left + 'px';
-    pop.style.top = (key.offsetTop - pop.offsetHeight - 6) + 'px';
+    pop.style.top = (key.offsetTop - pop.offsetHeight - 4) + 'px';
     return pop;
   }
 
   vkEl.addEventListener('contextmenu', e => e.preventDefault());
   vkEl.addEventListener('pointerdown', (e) => {
-    const key = e.target.closest && e.target.closest('.vk-key');
-    if (!key) return;
+    let key = e.target.closest && e.target.closest('.vk-key');
+    if (!key) {
+      const row = e.target.closest && e.target.closest('.vk-row');
+      if (!row) return;
+      let bd = Infinity;
+      row.querySelectorAll('.vk-key').forEach(kk => {
+        const r = kk.getBoundingClientRect();
+        const d = e.clientX < r.left ? r.left - e.clientX : e.clientX > r.right ? e.clientX - r.right : 0;
+        if (d < bd) { bd = d; key = kk; }
+      });
+      if (!key) return;
+    }
     e.preventDefault();
     const k = key.dataset.k;
     key.classList.add('down');
     vibrate(8);
+    press = { key, k };
     if (k === 'back') {
       back();
       repeatT = setTimeout(() => { repeatI = setInterval(back, 70); }, 380);
-      press = { key, k };
-    } else if (k === 'send') {
-      press = { key, k };
-    } else if (k === 'hacek' || k === 'carka') {
-      setDead(vkDead === k ? null : k);
-      press = { key, k };
-    } else {
-      press = { key, k };
-      if (VK_ALTS[k]) press.timer = setTimeout(() => { press.popup = showPopup(key, k); }, VK_LONG_MS);
+    } else if (VK_ALTS[k]) {
+      press.timer = setTimeout(() => { press.popup = showPopup(key, k); }, VK_LONG_MS);
     }
   });
   document.addEventListener('pointermove', (e) => {
@@ -1598,17 +1633,16 @@ function mountVK(input) {
     if (e.type !== 'pointercancel') {
       if (k === 'send') {
         vkInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      } else if (VK_ALTS[k]) {
-        if (press.popup) {
-          const el = document.elementFromPoint(e.clientX, e.clientY);
-          const alt = el && el.closest && el.closest('.vk-alt');
-          setDead(null);
-          insert(alt ? alt.dataset.c : k);
-        } else {
-          typeLetter(k);
-        }
-      } else if (k !== 'back' && k !== 'hacek' && k !== 'carka') {
-        typeLetter(k);
+      } else if (k === 'back') {
+        // smazáno už při stisku / opakováním
+      } else if (k === 'hacek' || k === 'carka') {
+        applyAccent(k);
+      } else if (press.popup) {
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const alt = el && el.closest && el.closest('.vk-alt');
+        insert(alt ? alt.dataset.c : k);
+      } else {
+        insert(k);
       }
     }
     closePopup();
@@ -1802,6 +1836,7 @@ function showBonusPopup(playerIdx, ms) {
 
 // ==== Výsledková obrazovka ====
 function renderResult(data) {
+  closeReportModal();
   const my = data.results[game.youAre];
   const opp = data.results[1 - game.youAre];
   const iWon = data.winnerIdx === game.youAre;
@@ -1831,6 +1866,7 @@ function renderResult(data) {
 
   app.innerHTML = `
     <div class="card result">
+      <button type="button" class="report-icon" id="reportOpenBtn" aria-label="Nahlásit hráče" title="Nahlásit hráče">!</button>
       <h2 class="${iWon ? 'win' : 'lose'}">${iWon ? 'Vyhrál(a) jsi!' : 'Prohrál(a) jsi'}</h2>
       <div style="color:var(--muted); font-size:13px">${reasonText} <span>(režim: ${MODE_LABEL[game.mode]})</span></div>
       <div class="row" style="margin-top:16px">
@@ -1851,9 +1887,6 @@ function renderResult(data) {
 
       <div id="rematchBox" class="rematch-box"></div>
 
-      <div id="reportBox" class="report-box">
-        <button type="button" class="report-link" id="reportOpenBtn">⚑ Nahlásit hráče</button>
-      </div>
 
       <div class="menu-list" style="margin-top:20px">
         <button class="menu-item" id="againBtn"><span class="ic">🔎</span><span>Najít dalšího soupeře</span></button>
@@ -1898,43 +1931,69 @@ function renderResult(data) {
 }
 
 // ==== Nahlášení hráče po zápase ====
+// Malá ikonka v rohu výsledku; důvod se vybírá v okně (dlaždice), ať to nezabírá místo.
+const REPORT_REASONS = [
+  { id: 'cheating', icon: '🎯', label: 'Podezření na cheating' },
+  { id: 'nick', icon: '🏷️', label: 'Nevhodná přezdívka' },
+  { id: 'behavior', icon: '💬', label: 'Chování' },
+  { id: 'other', icon: '…', label: 'Jiný důvod' },
+];
+
+function closeReportModal() {
+  const o = document.getElementById('rpOverlay');
+  if (o) o.remove();
+  document.removeEventListener('keydown', reportEsc);
+}
+function reportEsc(e) { if (e.key === 'Escape') closeReportModal(); }
+
 function bindReportBox(oppName) {
-  const box = document.getElementById('reportBox');
   const openBtn = document.getElementById('reportOpenBtn');
-  if (!box || !openBtn) return;
+  if (!openBtn) return;
   const roomId = game.roomId;
   openBtn.onclick = () => {
-    box.innerHTML = `
-      <div class="report-form">
-        <div class="report-title">Nahlásit hráče <b>${esc(oppName)}</b></div>
-        <div class="report-reasons">
-          <label><input type="radio" name="rr" value="cheating" checked> Podezření na cheating</label>
-          <label><input type="radio" name="rr" value="nick"> Nevhodná přezdívka</label>
-          <label><input type="radio" name="rr" value="behavior"> Chování</label>
-          <label><input type="radio" name="rr" value="other"> Jiný důvod</label>
+    if (openBtn.classList.contains('done')) return;
+    closeReportModal();
+    const ov = document.createElement('div');
+    ov.className = 'rp-overlay';
+    ov.id = 'rpOverlay';
+    ov.innerHTML = `
+      <div class="rp-sheet" role="dialog" aria-modal="true" aria-label="Nahlásit hráče">
+        <div class="rp-head"><span>Nahlásit hráče <b>${esc(oppName)}</b></span><button type="button" class="rp-x" id="rpClose" aria-label="Zavřít">✕</button></div>
+        <div class="rp-sub">Proč ho nahlašuješ?</div>
+        <div class="rp-reasons">
+          ${REPORT_REASONS.map(r => `<button type="button" class="rp-chip" data-r="${r.id}"><span class="rp-ic">${r.icon}</span><span>${r.label}</span></button>`).join('')}
         </div>
-        <textarea id="reportNote" maxlength="300" rows="2" placeholder="Poznámka (nepovinné) — co tě na hře zarazilo?"></textarea>
-        <div class="report-msg" id="reportMsg"></div>
-        <div class="report-actions">
-          <button type="button" class="secondary small" id="reportCancel">Zrušit</button>
-          <button type="button" class="small" id="reportSend">Odeslat</button>
-        </div>
+        <textarea id="rpNote" maxlength="300" rows="2" placeholder="Poznámka (nepovinné) — co tě na hře zarazilo?"></textarea>
+        <div class="rp-msg" id="rpMsg"></div>
+        <button type="button" class="rp-send" id="rpSend" disabled>Odeslat hlášení</button>
       </div>`;
-    document.getElementById('reportCancel').onclick = () => {
-      box.innerHTML = '<button type="button" class="report-link" id="reportOpenBtn">⚑ Nahlásit hráče</button>';
-      bindReportBox(oppName);
-    };
-    document.getElementById('reportSend').onclick = () => {
-      const btn = document.getElementById('reportSend');
-      const msg = document.getElementById('reportMsg');
-      const reason = (document.querySelector('input[name="rr"]:checked') || {}).value;
-      btn.disabled = true;
-      socket.emit('report_player', { roomId, reason, note: document.getElementById('reportNote').value }, (res) => {
+    document.body.appendChild(ov);
+    document.addEventListener('keydown', reportEsc);
+    let reason = null;
+    const sendBtn = document.getElementById('rpSend');
+    ov.addEventListener('click', (e) => { if (e.target === ov) closeReportModal(); });
+    document.getElementById('rpClose').onclick = closeReportModal;
+    ov.querySelectorAll('.rp-chip').forEach(chip => {
+      chip.onclick = () => {
+        reason = chip.dataset.r;
+        ov.querySelectorAll('.rp-chip').forEach(c => c.classList.toggle('on', c === chip));
+        sendBtn.disabled = false;
+        document.getElementById('rpMsg').textContent = '';
+      };
+    });
+    sendBtn.onclick = () => {
+      if (!reason) return;
+      sendBtn.disabled = true;
+      socket.emit('report_player', { roomId, reason, note: document.getElementById('rpNote').value }, (res) => {
         if (res && res.ok) {
-          box.innerHTML = '<div class="report-done">✓ Díky, hlášení bylo odesláno. Zápas prověříme.</div>';
+          const sheet = ov.querySelector('.rp-sheet');
+          sheet.innerHTML = '<div class="rp-done">✓ Díky, hlášení bylo odesláno.<small>Zápas prověříme.</small></div>';
+          openBtn.classList.add('done');
+          openBtn.title = 'Hráč už je nahlášen';
+          setTimeout(closeReportModal, 1800);
         } else {
-          btn.disabled = false;
-          msg.textContent = (res && res.message) || 'Odeslání se nepovedlo, zkus to znovu.';
+          sendBtn.disabled = false;
+          document.getElementById('rpMsg').textContent = (res && res.message) || 'Odeslání se nepovedlo, zkus to znovu.';
         }
       });
     };
@@ -1948,6 +2007,7 @@ let rematchTimer = null;
 // Dá serveru vědět, že hráč opustil obrazovku výsledku (odveta pak
 // soupeři přestane být nabízena a on se to dozví).
 function leaveResult() {
+  closeReportModal();
   clearInterval(rematchTimer);
   if (game && game.finished && game.roomId) socket.emit('result_left', { roomId: game.roomId });
 }
@@ -2002,8 +2062,10 @@ socket.on('rematch_unavailable', ({ reason }) => rematchSet({ phase: 'unavailabl
 // ==== Socket.io události ze serveru ====
 socket.on('waiting_for_opponent', () => { /* obrazovka hledání se už zobrazuje */ });
 
-socket.on('lobby_created', ({ code }) => {
+socket.on('lobby_created', ({ code, pattern }) => {
   currentLobbyCode = code;
+  const pl = document.getElementById('lobbyPatLine');
+  if (pl && pattern) pl.innerHTML = ` · zadání <b style="color:var(--accent)">${esc(pattern.toUpperCase())}</b>`;
   const el = document.getElementById('lobbyCodeNum');
   if (el) el.textContent = code;
 });
@@ -2017,6 +2079,7 @@ socket.on('lobby_expired', () => {
 });
 
 socket.on('match_found', (data) => {
+  closeReportModal();
   clearInterval(rematchTimer);
   currentLobbyCode = null;
   renderRevealCountdown(data);

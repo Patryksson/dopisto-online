@@ -18,7 +18,7 @@ const DAILY_BONUS_TYPES = [
   { id: 'twoO', label: 'Dvojité O', desc: 'Slovo obsahující písmeno O (nebo Ó) alespoň dvakrát.', check: c => countLetters(c.word, 'oó') >= 2 },
   { id: 'twoU', label: 'Dvojité U', desc: 'Slovo obsahující písmeno U (nebo Ú, Ů) alespoň dvakrát.', check: c => countLetters(c.word, 'uúů') >= 2 },
   { id: 'comeback', label: 'Comeback', desc: 'Platné slovo v okamžiku, kdy máš méně času než soupeř.', check: c => c.opponentTimeLeft != null && c.myTimeLeft < c.opponentTimeLeft },
-  { id: 'lastSecond', label: 'Last Second', desc: 'Slovo odešli s méně než 5 s na hodinách.', check: c => c.myTimeLeft < 5000 },
+  { id: 'lastSecond', label: 'Last Second', desc: 'Pošli platné slovo ve chvíli, kdy ti na hlavních hodinách zbývá méně než 5 sekund. Zachráníš se na poslední chvíli.', check: c => c.myTimeLeft < 5000 },
 ];
 const DAILY_BONUS_EXTRA_MS = 3000;
 
