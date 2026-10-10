@@ -497,19 +497,7 @@ function renderMenu(notice) {
       </div>
     </div>
 
-    <div class="social-links">
-      <a href="#" class="social-link" aria-label="Facebook">FB</a>
-      <a href="#" class="social-link" aria-label="Instagram">IG</a>
-      <a href="#" class="social-link" aria-label="Discord">DC</a>
-    </div>
-    <footer class="site-footer">
-      <a href="#">Časté dotazy</a>
-      <a href="#">Obchodní podmínky</a>
-      <a href="#">Ochrana údajů</a>
-      <a href="#">Kontakt</a>
-      <a href="#">Nahlásit chybu</a>
-      <a href="#">Nastavení cookies</a>
-    </footer>
+    ${footerHtml()}
     <div class="version-tag">Dopišto · v1.0</div>
     </div>
   `;
@@ -641,6 +629,176 @@ function renderPlayMenu(notice) {
 
   setupCodeBoxes();
 }
+
+
+// ==== Informační stránky (patička menu) ====
+const SITE = window.SITE || {};
+const TODO = (txt) => `<span class="todo">${txt}</span>`;
+const siteOperator = () => esc(SITE.operator) || TODO('[doplň provozovatele v client/site-config.js]');
+const siteEmail = () => SITE.email
+  ? `<a href="mailto:${esc(SITE.email)}">${esc(SITE.email)}</a>`
+  : TODO('[doplň e-mail v client/site-config.js]');
+
+function footerHtml() {
+  const socials = [['facebook', 'FB', 'Facebook'], ['instagram', 'IG', 'Instagram'], ['discord', 'DC', 'Discord']]
+    .filter(([k]) => /^https?:\/\//.test(SITE[k] || ''))
+    .map(([k, ab, label]) => `<a href="${esc(SITE[k])}" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="${label}">${ab}</a>`)
+    .join('');
+  return `
+    ${socials ? `<div class="social-links">${socials}</div>` : ''}
+    <footer class="site-footer">
+      <a href="#faq">Časté dotazy</a>
+      <a href="#podminky">Obchodní podmínky</a>
+      <a href="#ochrana-udaju">Ochrana údajů</a>
+      <a href="#kontakt">Kontakt</a>
+      <a href="#nahlasit">Nahlásit chybu</a>
+      <a href="#cookies">Nastavení cookies</a>
+    </footer>`;
+}
+
+const FAQ_ITEMS = [
+  ['Jak se hra hraje?', 'Na začátku dostanete zadání (např. slovo musí začínat na „TA“). Hráči se střídají a píší platná česká slova podle zadání. Každý má šachové hodiny — čas běží jen tomu, kdo je na tahu. Komu dojde čas, prohrává.'],
+  ['Musím se registrovat?', 'Ne. Stačí zadat přezdívku. Přezdívka se ukládá jen ve tvém prohlížeči.'],
+  ['Proč mi nebylo uznáno slovo?', 'Hra používá slovník základních tvarů — jednotné číslo, 1. pád (u sloves infinitiv). Skloňované a časované tvary, vlastní jména a zkratky neplatí. Pokud ti chybí běžné slovo, pošli ho přes „Nahlásit chybu“.'],
+  ['Co jsou režimy 1 písmeno, 2 písmena a Uprostřed?', '„1 písmeno“: slovo musí začínat daným písmenem a máš jen 10 s na tah. „2 písmena“: slovo začíná danou dvojicí. „Uprostřed“: dvojice se může objevit kdekoliv ve slově. Každý režim má vlastní žebříček ELO.'],
+  ['Co jsou penalizace a bonusy za slovo?', 'Slovo mimo slovník: −1 s, už použité slovo: −3 s, špatné zadání: −3 s. Za každé správné slovo dostaneš bonus k času (+3 s, v režimu 1 písmeno +1 s), ale ne nad startovní čas.'],
+  ['Co je bonus dne?', 'Každý den je jeden bonus (např. slovo s 8+ písmeny nebo dvěma stejnými samohláskami). Když ho splníš, dostaneš navíc +3 s — a ten smí přesáhnout startovní čas. Bonus dne je pro všechny stejný a ukazuje se v kartě Denní výzva.'],
+  ['Jak funguje Denní výzva?', 'Je to sólová hra na 180 s. Zadání je pro celý svět stejné a mění se o půlnoci (UTC). Můžeš ji hrát jen jednou za den. Série ukazuje, kolik dní po sobě jsi ji odehrál(a), a výsledek můžeš sdílet jako obrázek.'],
+  ['Co je ELO?', 'Číslo, které odhaduje tvou sílu. Začínáš na 1000. Vyhra nad silnějším soupeřem ti přidá víc bodů než výhra nad slabším. Každý režim má vlastní ELO a žebříček.'],
+  ['Jak hrát s kamarádem?', 'V „Hrát online“ klikni na „Vytvořit lobby“, pošli kamarádovi pětimístný kód a on ho zadá do políček a stiskne „Připojit“.'],
+  ['Co je odveta?', 'Po zápase můžeš soupeři poslat návrh na odvetu. Ten ji musí přijmout do několika sekund. Pokud hráč odešel do menu nebo zavřel stránku, odveta už není možná.'],
+  ['Spojení se mi přerušilo. Prohrál(a) jsem?', 'Ne hned. Máš 15 sekund na znovupřipojení do rozehrané hry. Poté soupeř vyhrává.'],
+  ['Jak smažu svá data?', 'Otevři „Nastavení cookies“ a klikni na „Smazat data z tohoto zařízení“. ELO a žebříček jsou ale uložené na serveru podle přezdívky — o jejich smazání napiš přes „Kontakt“.'],
+];
+
+function infoPageContent(key) {
+  switch (key) {
+    case 'faq':
+      return { title: 'Časté dotazy', body: FAQ_ITEMS.map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('') };
+    case 'kontakt':
+      return { title: 'Kontakt', body: `
+        <p>Máš dotaz, nápad nebo problém? Ozvi se nám.</p>
+        <h2>Provozovatel</h2><p>${siteOperator()}${SITE.address ? '<br>' + esc(SITE.address) : ''}</p>
+        <h2>E-mail</h2><p>${siteEmail()}</p>
+        <h2>Chyby a nápady</h2><p>Nejrychlejší je <a href="#nahlasit">formulář pro nahlášení chyby</a>.</p>` };
+    case 'podminky':
+      return { title: 'Obchodní podmínky', body: `
+        <p>Tyto podmínky upravují používání webové hry ${esc(SITE.name || 'Dopišto')} (dále „hra“). Provozovatel: ${siteOperator()}.</p>
+        <h2>1. Používání hry</h2>
+        <p>Hra je poskytována zdarma, bez registrace. Používáním hry souhlasíš s těmito podmínkami. Hra je určena pro zábavu a nezaručuje nepřetržitou dostupnost.</p>
+        <h2>2. Pravidla chování</h2>
+        <ul><li>Nepoužívej urážlivé, vulgární nebo klamavé přezdívky.</li>
+        <li>Nepokoušej se narušit chod hry (automatizované požadavky, zneužití chyb, obcházení omezení).</li>
+        <li>Nevydávej se za jiného hráče.</li></ul>
+        <p>Provozovatel může přezdívku odmítnout či odstranit z žebříčku a omezit přístup při porušení pravidel.</p>
+        <h2>3. Žebříček a výsledky</h2>
+        <p>ELO a výsledky jsou orientační a mohou být upraveny či resetovány (např. při chybě nebo při změně pravidel).</p>
+        <h2>4. Odpovědnost</h2>
+        <p>Hra je poskytována „tak, jak je“. Provozovatel neodpovídá za škody způsobené výpadkem nebo chybou hry v rozsahu, v jakém to dovoluje zákon.</p>
+        <h2>5. Změny podmínek</h2>
+        <p>Podmínky se mohou měnit. Aktuální znění je vždy na této stránce.</p>
+        <p style="color:var(--muted);font-size:12px">Poslední úprava: říjen 2026. Tento text je obecná šablona — před veřejným spuštěním ho nech zkontrolovat.</p>` };
+    case 'ochrana-udaju':
+      return { title: 'Ochrana údajů', body: `
+        <p>Správcem osobních údajů je ${siteOperator()}. Kontakt: ${siteEmail()}.</p>
+        <h2>Jaké údaje zpracováváme</h2>
+        <ul>
+          <li><b>Přezdívka</b> — zadáváš ji sám/sama. Zobrazuje se soupeři a v žebříčku.</li>
+          <li><b>Výsledky her</b> — ELO, počet výher a proher, výsledky Denní výzvy (nejlepší výsledek dne podle přezdívky, uchovává se několik dní).</li>
+          <li><b>IP adresa</b> — používá se pouze dočasně v paměti serveru k ochraně proti zneužití (omezení počtu spojení). Neukládá se do databáze.</li>
+          <li><b>Hlášení chyb</b> — text, který sám odešleš přes formulář, a volitelný kontakt.</li>
+        </ul>
+        <h2>Co ukládáme ve tvém prohlížeči</h2>
+        <p>Přezdívku, nastavení zvuku, sérii Denní výzvy a dnešní výsledek. Hra nepoužívá sledovací cookies ani analytiku třetích stran.</p>
+        <h2>Účel a doba uložení</h2>
+        <p>Údaje slouží k provozu hry (hledání soupeřů, žebříček). Přezdívka a ELO se uchovávají, dokud hra běží nebo dokud nepožádáš o smazání.</p>
+        <h2>Tvá práva</h2>
+        <p>Můžeš požádat o přístup k údajům, jejich opravu nebo smazání a podat stížnost u Úřadu pro ochranu osobních údajů (uoou.cz). Napiš na ${siteEmail()}.</p>
+        <p style="color:var(--muted);font-size:12px">Poslední úprava: říjen 2026. Tento text je obecná šablona — před veřejným spuštěním ho nech zkontrolovat.</p>` };
+    case 'cookies':
+      return { title: 'Nastavení cookies', body: `
+        <p>Hra nepoužívá cookies pro sledování ani reklamu. K fungování používá pouze <b>úložiště v prohlížeči</b> (localStorage):</p>
+        <ul><li>přezdívka,</li><li>nastavení zvuku a vibrací,</li><li>série a dnešní výsledek Denní výzvy.</li></ul>
+        <p>Toto úložiště je nezbytné pro fungování hry, proto se k němu neptáme na souhlas.</p>
+        <div class="menu-list" style="margin-top:16px"><button class="secondary small" id="clearDataBtn" style="width:100%">Smazat data z tohoto zařízení</button></div>
+        <div class="info-ok" id="clearDataMsg"></div>` };
+    case 'nahlasit':
+      return { title: 'Nahlásit chybu', body: `
+        <p>Něco nefunguje, chybí ti slovo ve slovníku nebo chceš nahlásit hráče? Napiš nám.</p>
+        <div class="info-form">
+          <label for="repType">O co jde</label>
+          <select id="repType">
+            <option value="bug">Chyba ve hře</option>
+            <option value="word">Chybí / je špatně slovo ve slovníku</option>
+            <option value="player">Nahlásit hráče</option>
+            <option value="idea">Nápad na vylepšení</option>
+          </select>
+          <label for="repText">Popis</label>
+          <textarea id="repText" maxlength="1000" placeholder="Popiš, co se stalo, nebo napiš slovo / přezdívku hráče…"></textarea>
+          <label for="repContact">Kontakt (nepovinné)</label>
+          <input id="repContact" maxlength="80" placeholder="E-mail, pokud chceš odpověď" />
+          <div class="menu-list" style="margin-top:16px"><button class="menu-item" id="repSend"><span>Odeslat</span></button></div>
+          <div class="error" id="repErr"></div>
+          <div class="info-ok" id="repOk"></div>
+        </div>` };
+    default:
+      return null;
+  }
+}
+
+function renderInfoPage(key) {
+  const page = infoPageContent(key);
+  if (!page) { renderMenu(); return; }
+  clearInterval(menuTimer);
+  app.innerHTML = `
+    <div class="page">
+    <div class="card info-card">
+      <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
+      <button type="button" class="back-link" id="infoBackBtn">‹ Zpět</button>
+      <h1>${page.title}</h1>
+      <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
+      <div class="info-body">${page.body}</div>
+    </div>
+    </div>`;
+  document.getElementById('soundBtn').onclick = toggleSound;
+  document.getElementById('infoBackBtn').onclick = () => { location.hash = ''; renderMenu(); };
+  window.scrollTo(0, 0);
+
+  if (key === 'cookies') {
+    document.getElementById('clearDataBtn').onclick = () => {
+      if (!confirm('Smazat přezdívku, nastavení a uložené výsledky z tohoto zařízení?')) return;
+      try { localStorage.clear(); } catch {}
+      document.getElementById('clearDataMsg').textContent = 'Hotovo — data z tohoto zařízení byla smazána.';
+    };
+  }
+  if (key === 'nahlasit') {
+    document.getElementById('repSend').onclick = () => {
+      const text = document.getElementById('repText').value.trim();
+      const err = document.getElementById('repErr');
+      const ok = document.getElementById('repOk');
+      err.textContent = ''; ok.textContent = '';
+      if (text.length < 5) { err.textContent = 'Napiš prosím aspoň pár slov.'; return; }
+      socket.emit('submit_report', {
+        type: document.getElementById('repType').value,
+        text,
+        contact: document.getElementById('repContact').value.trim(),
+        nickname: loadNickname(),
+      }, (res) => {
+        if (res && res.ok) { ok.textContent = 'Díky! Hlášení bylo odesláno.'; document.getElementById('repText').value = ''; }
+        else err.textContent = (res && res.message) || 'Odeslání se nepovedlo, zkus to později.';
+      });
+    };
+  }
+}
+
+// Stránky jsou adresovatelné přes #hash (sdílitelné odkazy, tlačítko zpět).
+const INFO_KEYS = ['faq', 'kontakt', 'podminky', 'ochrana-udaju', 'cookies', 'nahlasit'];
+function routeFromHash() {
+  const key = location.hash.replace('#', '');
+  if (INFO_KEYS.includes(key) && !game && !dailyState) renderInfoPage(key);
+  else if (!key && document.querySelector('.info-card')) renderMenu();
+}
+window.addEventListener('hashchange', routeFromHash);
 
 // Pět samostatných políček pro kód lobby — auto-přeskakování na další/
 // předchozí políčko při psaní/mazání, vkládání (paste) rozdělí celý kód.
@@ -1023,7 +1181,7 @@ function generateDailyShareImage(data) {
 
   ctx.fillStyle = '#5a5a5a';
   ctx.font = '13px Arial, sans-serif';
-  ctx.fillText('dopisto.online', 300, height - 30);
+  ctx.fillText((window.SITE && window.SITE.domain) || location.host || 'Dopišto', 300, height - 30);
 
   return canvas;
 }
@@ -1882,6 +2040,7 @@ function hideOpponentDisconnectedBanner() {
 }
 
 renderMenu();
+routeFromHash();
 
 // Zvukový klik na jakékoliv tlačítko nebo rozbalovací odkaz.
 document.addEventListener('click', (e) => {

@@ -268,6 +268,28 @@ function setupGame(io, socket) {
   // ==== Denní výzva — sólo, bez soupeře, jednou denně stejné zadání pro
   // úplně všechny (viz dailyPattern v dictionary.js). ====
   socket.on('get_daily_leaderboard', (cb) => { if (typeof cb === 'function') cb(store.dailyLeaderboard(20)); });
+  // Hlášení chyb, chybějících slov, nápadů a nahlášení hráčů.
+  socket.on('submit_report', (payload, cb) => {
+    const reply = (res) => { if (typeof cb === 'function') cb(res); };
+    if (!payload || typeof payload !== 'object') return reply({ ok: false });
+    const types = ['bug', 'word', 'player', 'idea'];
+    const text = typeof payload.text === 'string' ? payload.text.trim().slice(0, 1000) : '';
+    if (text.length < 5) return reply({ ok: false, message: 'Napiš prosím aspoň pár slov.' });
+    const clean = (v, n) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n) : '');
+    try {
+      store.addReport({
+        type: types.includes(payload.type) ? payload.type : 'bug',
+        text: text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, ''),
+        contact: clean(payload.contact, 80),
+        nickname: clean(payload.nickname, 20),
+      });
+      reply({ ok: true });
+    } catch (e) {
+      console.error('report error', e);
+      reply({ ok: false, message: 'Hlášení se nepodařilo uložit.' });
+    }
+  });
+
   socket.on('get_daily_info', (cb) => {
     if (typeof cb === 'function') cb({ bonus: publicBonus(dailyBonusForDate()), pattern: dailyPattern() });
   });

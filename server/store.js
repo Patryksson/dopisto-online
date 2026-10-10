@@ -72,4 +72,13 @@ function dailyLeaderboard(limit = 20) {
   return Object.values(today).sort((a, b) => b.count - a.count).slice(0, limit);
 }
 
-module.exports = { getProfile, recordResult, leaderboard, recordDaily, dailyLeaderboard };
+// ==== Hlášení chyb / nahlášení hráčů (soubor reports.json, max 500 záznamů) ====
+const REPORTS_FILE = path.join(__dirname, 'data', 'reports.json');
+function addReport(r) {
+  let list = [];
+  try { list = JSON.parse(fs.readFileSync(REPORTS_FILE, 'utf8')); } catch {}
+  list.push({ ...r, at: new Date().toISOString() });
+  fs.writeFileSync(REPORTS_FILE, JSON.stringify(list.slice(-500), null, 1));
+}
+
+module.exports = { addReport, getProfile, recordResult, leaderboard, recordDaily, dailyLeaderboard };

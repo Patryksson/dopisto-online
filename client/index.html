@@ -190,6 +190,27 @@
   #app > .page, #app > .card { animation: screenIn .3s cubic-bezier(.22,.9,.3,1) both; }
   @keyframes screenIn { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
 
+  /* ---- Informační stránky (FAQ, podmínky, ochrana údajů…) ---- */
+  .info-card { text-align:left; }
+  .info-card h1 { text-align:center; font-size:20px; letter-spacing:3px; margin:6px 0 10px; }
+  .info-body { font-size:14px; line-height:1.6; color:var(--ink-soft); }
+  .info-body h2 { font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:#fff; margin:20px 0 6px; }
+  .info-body p { margin:0 0 10px; }
+  .info-body ul { margin:0 0 10px; padding-left:20px; }
+  .info-body li { margin-bottom:4px; }
+  .info-body a { color:var(--accent); }
+  .info-body .todo { color:#ffb4b0; background:rgba(255,59,59,.12); padding:0 4px; border-radius:4px; }
+  .info-body details { border-bottom:1px solid var(--line); padding:10px 0; }
+  .info-body summary { cursor:pointer; color:#fff; font-weight:600; list-style:none; display:flex; justify-content:space-between; gap:10px; }
+  .info-body summary::-webkit-details-marker { display:none; }
+  .info-body summary::after { content:'+'; color:var(--accent); font-size:18px; line-height:1; }
+  .info-body details[open] summary::after { content:'–'; }
+  .info-body details p { margin:8px 0 0; }
+  .info-form label { display:block; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:12px 0 4px; }
+  .info-form select, .info-form textarea, .info-form input { width:100%; box-sizing:border-box; background:var(--paper-2); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:11px 12px; font:inherit; }
+  .info-form textarea { min-height:120px; resize:vertical; }
+  .info-ok { color:#7ee2a0; text-align:center; margin-top:12px; }
+  .site-footer a.active { color:var(--accent); }
   .menu-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
 
   .letter-tiles { display: flex; justify-content: center; gap: 8px; margin: 4px 0 14px; flex-wrap: wrap; }
@@ -538,6 +559,7 @@
 <div id="app"></div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="app.js?v=20261010a"></script>
+<script src="site-config.js"></script>
+<script src="app.js?v=20261010b"></script>
 </body>
 </html>
