@@ -1546,12 +1546,30 @@ function mountVK(input) {
   }
 
   const rows = vkEl.querySelector('.vk-rows');
-  let press = null, repeatT = null, repeatI = null;
+  const presses = new Map();   // pointerId -> stisk (víc prstů najednou)
+
+  // Výška kláves podle displeje (na výšku větší, na šířku menší)
+  function applyKeySize() {
+    const h = window.innerHeight || 700, w = window.innerWidth || 400;
+    const portrait = h >= w;
+    let kh = portrait ? h * 0.064 : h * 0.095;
+    kh = Math.round(Math.max(portrait ? 38 : 30, Math.min(portrait ? 56 : 40, kh)));
+    vkEl.style.setProperty('--kh', kh + 'px');
+    setH();
+  }
+  applyKeySize();
+  window.addEventListener('resize', applyKeySize, sig);
+  window.addEventListener('orientationchange', () => setTimeout(applyKeySize, 200), sig);
 
   function accMap(kind) { return kind === 'hacek' ? VK_HACEK : VK_CARKA; }
   function updateAcc() {
     const last = vkInput.value.slice(-1);
     vkEl.querySelectorAll('.vk-acc').forEach(b => b.classList.toggle('dim', !accMap(b.dataset.k)[last]));
+  }
+  function changed() {
+    vkInput.dispatchEvent(new Event('input', { bubbles: true }));
+    vkInput.scrollLeft = vkInput.scrollWidth;
+    updateAcc();
   }
   function applyAccent(kind) {
     const v = vkInput.value;
@@ -1560,13 +1578,6 @@ function mountVK(input) {
     vkInput.value = v.slice(0, -1) + to;
     changed();
   }
-  function changed() {
-    vkInput.dispatchEvent(new Event('input', { bubbles: true }));
-    vkInput.scrollLeft = vkInput.scrollWidth;
-    updateAcc();
-  }
-  updateAcc();
-  vkInput.addEventListener('input', updateAcc, sig);
   function insert(ch) {
     if (vkInput.value.length >= 40) return;
     vkInput.value += ch;
@@ -1577,9 +1588,29 @@ function mountVK(input) {
     vkInput.value = vkInput.value.slice(0, -1);
     changed();
   }
-  function stopRepeat() { clearTimeout(repeatT); clearInterval(repeatI); repeatT = repeatI = null; }
-  function closePopup() {
-    if (press && press.popup) { press.popup.remove(); press.popup = null; }
+  updateAcc();
+  vkInput.addEventListener('input', updateAcc, sig);
+
+  const isLetterKey = (k) => k !== 'back' && k !== 'send' && k !== 'hacek' && k !== 'carka';
+
+  function showBubble(key, k) {
+    const b = document.createElement('div');
+    b.className = 'vk-prev';
+    b.textContent = k;
+    rows.appendChild(b);
+    const w = key.offsetWidth + 16;
+    let left = key.offsetLeft - 8;
+    left = Math.max(0, Math.min(left, rows.clientWidth - w));
+    b.style.width = w + 'px';
+    b.style.left = left + 'px';
+    b.style.top = (key.offsetTop - b.offsetHeight - 2) + 'px';
+    return b;
+  }
+  function hideBubble(pr, delay) {
+    const b = pr.bubble;
+    if (!b) return;
+    pr.bubble = null;
+    if (delay) setTimeout(() => b.remove(), delay); else b.remove();
   }
   function showPopup(key, k) {
     const alts = VK_ALTS[k];
@@ -1593,6 +1624,11 @@ function mountVK(input) {
     pop.style.left = left + 'px';
     pop.style.top = (key.offsetTop - pop.offsetHeight - 4) + 'px';
     return pop;
+  }
+  // Pojistka: šedé zvýraznění nesmí zůstat viset na klávese, kterou nikdo nedrží.
+  function sweepDown() {
+    const held = new Set([...presses.values()].map(p => p.key));
+    vkEl && vkEl.querySelectorAll('.vk-key.down').forEach(k => { if (!held.has(k)) k.classList.remove('down'); });
   }
 
   vkEl.addEventListener('contextmenu', e => e.preventDefault());
@@ -1613,26 +1649,31 @@ function mountVK(input) {
     const k = key.dataset.k;
     key.classList.add('down');
     vibrate(8);
-    press = { key, k };
+    const pr = { key, k };
+    presses.set(e.pointerId, pr);
     if (k === 'back') {
       back();
-      repeatT = setTimeout(() => { repeatI = setInterval(back, 70); }, 380);
-    } else if (VK_ALTS[k]) {
-      press.timer = setTimeout(() => { press.popup = showPopup(key, k); }, VK_LONG_MS);
+      pr.repeatT = setTimeout(() => { pr.repeatI = setInterval(back, 70); }, 380);
+    } else if (isLetterKey(k)) {
+      pr.bubble = showBubble(key, k);
+      if (VK_ALTS[k]) pr.timer = setTimeout(() => { hideBubble(pr); pr.popup = showPopup(key, k); }, VK_LONG_MS);
     }
   });
   document.addEventListener('pointermove', (e) => {
-    if (!press || !press.popup) return;
+    const pr = presses.get(e.pointerId);
+    if (!pr || !pr.popup) return;
     const el = document.elementFromPoint(e.clientX, e.clientY);
     const alt = el && el.closest && el.closest('.vk-alt');
-    press.popup.querySelectorAll('.vk-alt').forEach(a => a.classList.toggle('hot', a === alt));
+    pr.popup.querySelectorAll('.vk-alt').forEach(a => a.classList.toggle('hot', a === alt));
   }, sig);
   const release = (e) => {
-    if (!press) return;
-    const { key, k } = press;
+    const pr = presses.get(e.pointerId);
+    if (!pr) return;
+    presses.delete(e.pointerId);
+    const { key, k } = pr;
     key.classList.remove('down');
-    clearTimeout(press.timer);
-    stopRepeat();
+    clearTimeout(pr.timer); clearTimeout(pr.repeatT); clearInterval(pr.repeatI);
+    hideBubble(pr, 70);
     if (e.type !== 'pointercancel') {
       if (k === 'send') {
         vkInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -1640,7 +1681,7 @@ function mountVK(input) {
         // smazáno už při stisku / opakováním
       } else if (k === 'hacek' || k === 'carka') {
         applyAccent(k);
-      } else if (press.popup) {
+      } else if (pr.popup) {
         const el = document.elementFromPoint(e.clientX, e.clientY);
         const alt = el && el.closest && el.closest('.vk-alt');
         insert(alt ? alt.dataset.c : k);
@@ -1648,8 +1689,8 @@ function mountVK(input) {
         insert(k);
       }
     }
-    closePopup();
-    press = null;
+    if (pr.popup) { pr.popup.remove(); pr.popup = null; }
+    setTimeout(sweepDown, 300);
   };
   document.addEventListener('pointerup', release, sig);
   document.addEventListener('pointercancel', release, sig);

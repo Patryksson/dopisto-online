@@ -591,7 +591,7 @@ body.has-vk{padding-bottom:calc(var(--vk-h,250px) + 8px)}
 body.has-vk .word-input #sendBtn{display:none}
 body.has-vk #wordInputRow{scroll-margin-bottom:calc(var(--vk-h,250px) + 10px)}
 body.has-vk .wi-field input{caret-color:var(--accent)}
-.vk{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#12121a;border-top:1px solid var(--line);padding:6px 2px calc(6px + env(safe-area-inset-bottom));touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;box-shadow:0 -8px 24px rgba(0,0,0,.45);animation:vkIn .32s cubic-bezier(.22,.9,.3,1) both}
+.vk{--kh:48px;text-transform:none;position:fixed;left:0;right:0;bottom:0;z-index:50;background:#12121a;border-top:1px solid var(--line);padding:6px 2px calc(6px + env(safe-area-inset-bottom));touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;box-shadow:0 -8px 24px rgba(0,0,0,.45);animation:vkIn .32s cubic-bezier(.22,.9,.3,1) both}
 .vk.out{animation:vkOut .2s ease-in both;pointer-events:none}
 @keyframes vkIn{from{transform:translateY(100%)}to{transform:none}}
 @keyframes vkOut{from{transform:none}to{transform:translateY(100%)}}
@@ -600,24 +600,27 @@ body.has-vk .wi-field input{caret-color:var(--accent)}
 .vk-row{display:flex}
 .vk-row2{padding:0 5%}
 /* celá buňka je cílová oblast; vzhled klávesy je vložený uvnitř */
-.vk-key{position:relative;flex:1 1 0;min-width:0;height:48px;padding:0;margin:0;width:auto;border:none;border-radius:0;background:transparent;box-shadow:none;color:var(--ink,#fff);-webkit-tap-highlight-color:transparent;text-transform:none;font-family:inherit}
-.vk-cap{position:absolute;inset:3px 2px;border-radius:8px;background:#242432;box-shadow:0 2px 0 rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:19px;line-height:1;transition:background .06s}
+.vk-key{position:relative;flex:1 1 0;min-width:0;height:var(--kh);padding:0;margin:0;width:auto;border:none;border-radius:0;background:transparent;box-shadow:none;color:var(--ink,#fff);-webkit-tap-highlight-color:transparent;text-transform:none;font-family:inherit;letter-spacing:0}
+.vk-cap{position:absolute;inset:3px 2px;border-radius:8px;background:#242432;box-shadow:0 2px 0 rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:calc(var(--kh)*.4);line-height:1;transition:background .25s ease-out}
 .vk-cap i{position:absolute;top:3px;right:4px;font-style:normal;font-size:9px;font-weight:500;color:var(--muted);letter-spacing:0}
-.vk-key.down .vk-cap{background:#3c3c55;transform:translateY(1px);box-shadow:none}
-.vk-dia .vk-key{height:44px}
-.vk-dia .vk-cap{background:#2e1c20;color:#ff6b6b;font-size:18px}
+.vk-key.down .vk-cap{background:#3c3c55;transform:translateY(1px);box-shadow:none;transition:none}
+.vk-dia .vk-key{height:calc(var(--kh)*.92)}
+.vk-dia .vk-cap{background:#2e1c20;color:#ff6b6b;font-size:calc(var(--kh)*.375)}
 .vk-dia .vk-key.down .vk-cap{background:#4a2630}
 .vk-acc{flex:1.05 1 0}
-.vk-acc .vk-cap{background:#2e1c20;color:#ff6b6b;font-size:24px;transition:opacity .12s}
+.vk-acc .vk-cap{background:#2e1c20;color:#ff6b6b;font-size:calc(var(--kh)*.5);transition:opacity .12s,background .25s ease-out}
 .vk-acc.dim .vk-cap{opacity:.38}
 .vk-acc.down .vk-cap{background:#4a2630}
 .vk-back{flex:1.4 1 0}
-.vk-back .vk-cap{font-size:20px}
-.vk-send{flex:1;height:52px}
-.vk-send .vk-cap{background:var(--accent);color:#fff;font-size:16px;letter-spacing:.5px;text-transform:uppercase;box-shadow:none}
+.vk-back .vk-cap{font-size:calc(var(--kh)*.42)}
+.vk-send{flex:1;height:calc(var(--kh)*1.08)}
+.vk-send .vk-cap{background:var(--accent);color:#fff;font-size:calc(var(--kh)*.33);letter-spacing:.5px;text-transform:uppercase;box-shadow:none}
 .vk-send.down .vk-cap{background:#d62f2f}
-.vk-pop{position:absolute;z-index:60;display:flex;gap:4px;padding:6px;background:#2c2c3e;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.6);border:1px solid var(--line)}
-.vk-alt{min-width:42px;height:48px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600;border-radius:8px;color:var(--ink,#fff)}
+/* náhled znaku nad klávesou */
+.vk-prev{position:absolute;z-index:70;display:flex;align-items:center;justify-content:center;height:calc(var(--kh)*1.15);background:#2c2c3e;color:var(--ink,#fff);border:1px solid var(--line);border-radius:12px;font-weight:600;font-size:calc(var(--kh)*.6);line-height:1;box-shadow:0 6px 18px rgba(0,0,0,.55);pointer-events:none;animation:vkPrev .08s ease-out both}
+@keyframes vkPrev{from{opacity:.4;transform:translateY(6px)}to{opacity:1;transform:none}}
+.vk-pop{position:absolute;z-index:80;display:flex;gap:4px;padding:6px;background:#2c2c3e;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.6);border:1px solid var(--line)}
+.vk-alt{min-width:calc(var(--kh)*.88);height:calc(var(--kh)*1);display:flex;align-items:center;justify-content:center;font-size:calc(var(--kh)*.5);font-weight:600;border-radius:8px;color:var(--ink,#fff)}
 .vk-alt.hot{background:var(--accent);color:#fff}
 
 .custom-pat{margin:10px 0 16px;text-align:left}
@@ -656,6 +659,6 @@ body.has-vk .wi-field input{caret-color:var(--accent)}
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="site-config.js"></script>
-<script src="app.js?v=20261011f"></script>
+<script src="app.js?v=20261011i"></script>
 </body>
 </html>
