@@ -125,6 +125,7 @@ function customPattern(mode, raw) {
   const v = raw.normalize('NFC').trim().toLowerCase();
   if (mode === 2 && VALID_PREFIXES.includes(v)) return { type: 'prefix2', value: v };
   if (mode === 'middle' && VALID_INFIX2.includes(v)) return { type: 'infix2', value: v };
+  if (mode === 'speed' && VALID_PREFIXES1.includes(v)) return { type: 'prefix1', value: v };
   return null;
 }
 

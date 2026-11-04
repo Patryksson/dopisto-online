@@ -157,7 +157,7 @@ function setupGame(io, socket) {
     if (typeof pattern === 'string' && pattern.trim()) {
       custom = customPattern(mode, pattern);
       if (!custom) {
-        socket.emit('lobby_error', { message: 'Tato kombinace písmen není v seznamu povolených dvojic. Zkus jinou, nebo nech pole prázdné pro náhodné zadání.' });
+        socket.emit('lobby_error', { message: 'Toto zadání není v seznamu povolených. Zkus jiné, nebo nech pole prázdné pro náhodné zadání.' });
         return;
       }
     }

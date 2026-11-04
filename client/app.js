@@ -330,6 +330,8 @@ const HOW_IT_WORKS_HTML = `
   založit soukromou hru a pozvat ho pomocí kódu. Na začátku dostanete
   zadání, kterému musí každé napsané slovo odpovídat. Poté se střídáte
   v psaní platných slov, dokud jednomu z vás nevyprší čas.
+  <br><br><b>Battle Royale</b> je zvláštní režim až pro 5 hráčů najednou —
+  vybereš ho v nabídce režimů vedle ostatních (záložka „Royale").
 `;
 
 const RULES_HTML = `
@@ -342,9 +344,16 @@ const RULES_HTML = `
       hráče).</li>
     <li><b>Uprostřed</b> — daná dvojice písmen se ve slově může nacházet
       kdekoliv — na začátku, uprostřed i na konci (90 s na hráče).</li>
+    <li><b>👑 Royale (Battle Royale)</b> — až 5 hráčů v kruhu, vyhrává poslední
+      přeživší. Pravidla jsou na konci tohoto přehledu.</li>
   </ol>
 
-  <p>Každý režim má vlastní, oddělený žebříček ELO.</p>
+  <p>Každý z režimů 1 písmeno, 2 písmena a Uprostřed má vlastní, oddělený
+  žebříček ELO. Battle Royale se do ELO nepočítá.</p>
+
+  <p><b>Vlastní lobby:</b> v soukromé hře s kamarádem si můžeš zvolit vlastní
+  zadání — jedno písmeno (1 písmeno), nebo dvojici písmen (2 písmena a
+  Uprostřed). Prázdné pole = náhodné zadání.</p>
 
   <p><b>Čas:</b> hlavní čas ubíhá jako u šachových hodin — jen tomu, kdo je
   na tahu. Dojde-li hráči čas, prohrává.</p>
@@ -366,6 +375,26 @@ const RULES_HTML = `
 
   <p><b>ELO:</b> po kole se hodnocení obou hráčů přepočítá standardním ELO
   vzorcem (K=32).</p>
+
+  <p><b>👑 Battle Royale (pravidla):</b></p>
+  <ul style="margin:6px 0; padding-left:20px">
+    <li>Hraje 2 až 5 hráčů, sedí v kruhu a střídají se po směru. Hra se
+      spustí, jakmile je plno (veřejná fronta po 45 s i od 3 hráčů).</li>
+    <li>Každý má <b>2 životy ❤</b>. Na každý tah je 15 s, s každým kolem
+      (jedna otočka všech) o 1 s méně, nejméně 5 s.</li>
+    <li>Zadání může být 1 písmeno, 2 písmena nebo „uprostřed". Slova se nesmí
+      opakovat. Tresty (−1 s / −3 s) se odečítají z času na aktuální tah.</li>
+    <li>Kdo nestihne odpovědět, přijde o život a zadání se změní — po
+      krátkém odpočtu pokračuje hráč, který byl na řadě po něm. Kdo přijde o
+      poslední život, vypadá; může pozorovat hru, nebo odejít.</li>
+    <li>Každý má 2 powerupy (jednou za hru, jen ve svém tahu):
+      <b>Přeskočit</b> (řada jde dál) a <b>Obrátit směr</b> (přeskočíš a řada
+      jde na hráče před tebou).</li>
+    <li><b>Bonus dne</b> tu nepřidává čas — plní metr pod jménem. Za 3
+      splněné bonusy dostaneš <b>bonusové srdce</b> (nejvýš 3 ❤; při plných
+      srdcích metr počká a srdce doplní, až o jedno přijdeš).</li>
+    <li>Vyhrává poslední hráč ve hře.</li>
+  </ul>
 `;
 
 // ==== Stav aplikace ====
@@ -585,10 +614,6 @@ function renderPlayMenu(notice) {
       <div class="mode-select">
         ${modeSegmentedHtml(selectedMode, true)}
       </div>
-      <div class="br-intro" id="brIntro" hidden>
-        <b>Až 5 hráčů v kruhu.</b> Střídáte se po směru, každý má <b>2 ❤</b>. Kdo nestihne odpovědět, přijde o život a zadání se změní
-        (1 písmeno, 2 písmena nebo uprostřed). S každým kolem je čas kratší. Vyhrává poslední přeživší.
-      </div>
       <div class="error" id="err">${notice || ''}</div>
 
       <div class="or-sep"><span class="line"></span><span>hrát proti náhodnému hráči</span><span class="line"></span></div>
@@ -602,10 +627,10 @@ function renderPlayMenu(notice) {
       <div class="menu-list">
         <button class="menu-item" id="createLobbyBtn"><span class="ic">＋</span><span>Vytvořit lobby</span></button>
       </div>
-      <div class="custom-pat" id="customPatRow" hidden>
+      <div class="custom-pat" id="customPatRow">
         <label for="customPat">Vlastní zadání <small>(nepovinné)</small></label>
         <input id="customPat" maxlength="2" placeholder="např. úč" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" />
-        <div class="custom-pat-hint">Dvě písmena, na která budete hrát. Prázdné pole = náhodné zadání.</div>
+        <div class="custom-pat-hint" id="customPatHint">Dvě písmena, na která budete hrát. Prázdné pole = náhodné zadání.</div>
       </div>
       <div class="lobby-row">
         <div class="code-boxes" id="joinCodeBoxes">
@@ -620,12 +645,17 @@ function renderPlayMenu(notice) {
   document.getElementById('soundBtn').onclick = toggleSound;
   document.getElementById('playBackBtn').onclick = () => renderMenu();
   const updateCustomPat = () => {
+    // Řádek zůstává v layoutu pořád (jen se skryje), ať se při přepínání režimů nemění výška okna.
     const row = document.getElementById('customPatRow');
-    if (row) row.hidden = !(selectedMode === 2 || selectedMode === 'middle');
-    const bi = document.getElementById('brIntro');
-    if (bi) bi.hidden = selectedMode !== 'br';
-    const fb = document.querySelector('#findBtn span:last-child');
-    if (fb) fb.textContent = selectedMode === 'br' ? 'Najít hráče' : 'Najít soupeře';
+    const inp = document.getElementById('customPat');
+    const hint = document.getElementById('customPatHint');
+    if (!row || !inp) return;
+    const one = selectedMode === 'speed';
+    row.style.visibility = selectedMode === 'br' ? 'hidden' : 'visible';
+    inp.maxLength = one ? 1 : 2;
+    inp.placeholder = one ? 'např. p' : (selectedMode === 'middle' ? 'např. ou' : 'např. úč');
+    if ([...inp.value].length > inp.maxLength) inp.value = '';
+    hint.textContent = (one ? 'Jedno písmeno, na které budete hrát.' : 'Dvě písmena, na která budete hrát.') + ' Prázdné pole = náhodné zadání.';
   };
   bindModeSegmented(() => selectedMode, (newMode) => { selectedMode = newMode; updateCustomPat(); });
   updateCustomPat();
@@ -643,10 +673,11 @@ function renderPlayMenu(notice) {
     ensureAudioCtx();
     if (selectedMode === 'br') { brScreen = 'joining'; socket.emit('br_create_lobby', { nickname: n }); renderBrWait('Vytvářím lobby…'); return; }
     let pattern = '';
-    if (selectedMode === 2 || selectedMode === 'middle') {
+    if (selectedMode === 2 || selectedMode === 'middle' || selectedMode === 'speed') {
       pattern = (document.getElementById('customPat').value || '').trim().toLowerCase();
-      if (pattern && [...pattern].length !== 2) {
-        document.getElementById('err').textContent = 'Vlastní zadání musí mít přesně dvě písmena.';
+      const need = selectedMode === 'speed' ? 1 : 2;
+      if (pattern && [...pattern].length !== need) {
+        document.getElementById('err').textContent = need === 1 ? 'Vlastní zadání musí být přesně jedno písmeno.' : 'Vlastní zadání musí mít přesně dvě písmena.';
         return;
       }
     }
@@ -1342,7 +1373,7 @@ let currentLobbyCode = null;
 function renderLobbyWaiting() {
   app.innerHTML = `
     <div class="card" style="text-align:center">
-      <p style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:0">Režim: ${MODE_LABEL[selectedMode]}</p>
+      <p style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:0">Režim: ${MODE_LABEL[selectedMode]}<span id="lobbyPatLine"></span></p>
       <div class="spinner"></div>
       <p style="color:var(--ink-soft); font-size:13px; margin-bottom:0">Čekání na soupeře…</p>
       <div class="lobby-code" id="lobbyCodeNum">·····</div>
