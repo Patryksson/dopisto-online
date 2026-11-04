@@ -27,7 +27,7 @@ function patternInputPlaceholder(pattern) {
 
 // U zadání "začíná na…" se pole po odeslání samo vyplní zadanými písmeny.
 function patternPrefill(pattern) {
-  return soundPrefs.prefill !== false && pattern && pattern.type !== 'infix2' ? String(pattern.value || '').toLowerCase() : '';
+  return soundPrefs.prefill === true && pattern && pattern.type !== 'infix2' ? String(pattern.value || '').toLowerCase() : '';
 }
 
 function currentInstructionText() { return patternInstruction(game.pattern); }
@@ -52,7 +52,7 @@ function saveNickname(n) {
   localStorage.setItem('dopisto_nickname', n);
 }
 
-const MODE_LABEL = { speed: '1 písmeno', 2: '2 písmena', middle: 'Uprostřed' };
+const MODE_LABEL = { speed: '1 písmeno', 2: '2 písmena', middle: 'Uprostřed', br: '👑 Royale' };
 const MODE_ICON = { speed: '⚡', 2: 'Aa', middle: '·A·' };
 const MODE_ORDER = ['speed', 2, 'middle'];
 function isBigIcon(m) { return m === 'speed'; }
@@ -61,17 +61,19 @@ function isBigIcon(m) { return m === 'speed'; }
 function modePreviewText(m) {
   if (m === 2) return '[AA]';
   if (m === 'speed') return '[⚡P]';
+  if (m === 'br') return '[👑5]';
   return '[·A·]';
 }
 
-function modeSegmentedHtml(selected) {
+function modeSegmentedHtml(selected, withBr) {
+  const MODES = withBr ? [...MODE_ORDER, 'br'] : MODE_ORDER;
   return `
     <div class="mode-preview-row">
-      ${MODE_ORDER.map(m => `<span data-mode="${m}" class="${selected === m ? 'active' : ''}">${modePreviewText(m)}</span>`).join('')}
+      ${MODES.map(m => `<span data-mode="${m}" class="${selected === m ? 'active' : ''}">${modePreviewText(m)}</span>`).join('')}
     </div>
     <div class="mode-segmented" id="modeSegmented">
       <div class="seg-indicator" id="segIndicator"></div>
-      ${MODE_ORDER.map(m => `<button class="seg-btn ${selected === m ? 'active' : ''}" data-mode="${m}">${MODE_LABEL[m]}</button>`).join('')}
+      ${MODES.map(m => `<button class="seg-btn ${selected === m ? 'active' : ''}" data-mode="${m}">${MODE_LABEL[m]}</button>`).join('')}
     </div>
   `;
 }
@@ -128,7 +130,7 @@ const SOUND_PREFS_INFO = {
   prefill: { icon: '✏️', label: 'Předvyplnit zadání', desc: 'Po odeslání se do pole samo vrátí zadané písmeno nebo dvojice' },
   vkeyboard: { icon: '⌨️', label: 'Vlastní klávesnice', desc: 'Česká klávesnice přímo ve hře, bez návrhů slov (jen mobil a tablet)' },
 };
-let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true, prefill: true, vkeyboard: true };
+let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true, prefill: false, vkeyboard: true };
 try { Object.assign(soundPrefs, JSON.parse(localStorage.getItem('dopisto_sound_prefs') || '{}')); } catch {}
 function saveSoundPrefs() { try { localStorage.setItem('dopisto_sound_prefs', JSON.stringify(soundPrefs)); } catch {} }
 function soundOn(cat) { return soundEnabled && soundPrefs[cat] !== false; }
@@ -453,7 +455,7 @@ function settingsHtml() {
     <label class="setting-row">
       <span class="setting-ic">${i.icon}</span>
       <span class="setting-text"><b>${i.label}</b><small>${i.desc}</small></span>
-      <input type="checkbox" class="switch" data-pref="${k}" ${soundPrefs[k] !== false ? 'checked' : ''} />
+      <input type="checkbox" class="switch" data-pref="${k}" ${(k === 'prefill' ? soundPrefs[k] === true : soundPrefs[k] !== false) ? 'checked' : ''} />
     </label>`;
   }).join('') + '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře. „Vlastní klávesnice“ a „Předvyplnit zadání“ se projeví od příští hry.</div>';
 }
@@ -505,7 +507,7 @@ function renderMenu(notice) {
     </div>
 
     ${footerHtml()}
-    <div class="version-tag">Dopišto · v1.0</div>
+    <div class="version-row"><span class="version-tag">Dopišto · v1.0</span><span class="social-mini-row">${socialIconsHtml()}</span></div>
     </div>
   `;
 
@@ -523,7 +525,7 @@ function renderMenu(notice) {
       }
     };
   });
-  document.getElementById('leaderboardLinkBtn').onclick = () => renderLeaderboard(selectedMode);
+  document.getElementById('leaderboardLinkBtn').onclick = () => renderLeaderboard(selectedMode === 'br' ? 2 : selectedMode);
   document.getElementById('playBtn').onclick = () => {
     if (!requireNick()) return;
     ensureAudioCtx();
@@ -581,7 +583,11 @@ function renderPlayMenu(notice) {
       <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
 
       <div class="mode-select">
-        ${modeSegmentedHtml(selectedMode)}
+        ${modeSegmentedHtml(selectedMode, true)}
+      </div>
+      <div class="br-intro" id="brIntro" hidden>
+        <b>Až 5 hráčů v kruhu.</b> Střídáte se po směru, každý má <b>2 ❤</b>. Kdo nestihne odpovědět, přijde o život a zadání se změní
+        (1 písmeno, 2 písmena nebo uprostřed). S každým kolem je čas kratší. Vyhrává poslední přeživší.
       </div>
       <div class="error" id="err">${notice || ''}</div>
 
@@ -616,6 +622,10 @@ function renderPlayMenu(notice) {
   const updateCustomPat = () => {
     const row = document.getElementById('customPatRow');
     if (row) row.hidden = !(selectedMode === 2 || selectedMode === 'middle');
+    const bi = document.getElementById('brIntro');
+    if (bi) bi.hidden = selectedMode !== 'br';
+    const fb = document.querySelector('#findBtn span:last-child');
+    if (fb) fb.textContent = selectedMode === 'br' ? 'Najít hráče' : 'Najít soupeře';
   };
   bindModeSegmented(() => selectedMode, (newMode) => { selectedMode = newMode; updateCustomPat(); });
   updateCustomPat();
@@ -623,6 +633,7 @@ function renderPlayMenu(notice) {
   document.getElementById('findBtn').onclick = () => {
     const n = requireNick(); if (!n) return;
     ensureAudioCtx();
+    if (selectedMode === 'br') { socket.emit('br_find', { nickname: n }); renderBrQueue(1); return; }
     socket.emit('find_match', { nickname: n, mode: selectedMode });
     renderSearching(n);
   };
@@ -630,6 +641,7 @@ function renderPlayMenu(notice) {
   document.getElementById('createLobbyBtn').onclick = () => {
     const n = requireNick(); if (!n) return;
     ensureAudioCtx();
+    if (selectedMode === 'br') { brScreen = 'joining'; socket.emit('br_create_lobby', { nickname: n }); renderBrWait('Vytvářím lobby…'); return; }
     let pattern = '';
     if (selectedMode === 2 || selectedMode === 'middle') {
       pattern = (document.getElementById('customPat').value || '').trim().toLowerCase();
@@ -648,6 +660,7 @@ function renderPlayMenu(notice) {
     const code = getJoinCode();
     if (code.length < 5) { err.textContent = 'Zadej celý kód lobby.'; return; }
     ensureAudioCtx();
+    if (selectedMode === 'br') { brScreen = 'joining'; socket.emit('br_join_lobby', { nickname: n, code }); renderBrWait('Připojuji se…'); return; }
     socket.emit('join_lobby', { nickname: n, code });
     renderJoining();
   };
@@ -664,13 +677,23 @@ const siteEmail = () => SITE.email
   ? `<a href="mailto:${esc(SITE.email)}">${esc(SITE.email)}</a>`
   : TODO('[doplň e-mail v client/site-config.js]');
 
+// Drobné ikony sítí vedle verze (na stejném řádku, ať se stránka nezvětší).
+const SOCIAL_ICONS = {
+  facebook: '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M13.5 22v-8.2h2.8l.5-3.3h-3.3V8.4c0-.9.4-1.7 1.8-1.7h1.6V3.9c-.3 0-1.3-.2-2.4-.2-2.5 0-4.1 1.5-4.1 4.2v2.6H7.6v3.3h2.8V22h3.1z"/></svg>',
+  instagram: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.3" cy="6.7" r=".6" fill="currentColor"/></svg>',
+  discord: '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M5 6c2-1.2 4-1.7 4-1.7l.4.8c1.7-.2 3.5-.2 5.2 0l.4-.8s2 .5 4 1.7c2 3.2 2.6 6.7 2.4 10.2-1.5 1.1-3 1.8-4.5 2.2l-1-1.6c.6-.2 1.2-.5 1.7-.9-.3-.2-.6-.4-.9-.5-2.7 1.2-5.7 1.2-8.4 0-.3.1-.6.3-.9.5.5.4 1.1.7 1.7.9l-1 1.6c-1.5-.4-3-1.1-4.5-2.2C2.4 12.7 3 9.2 5 6Zm4.2 4.8a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm5.6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/></svg>',
+};
+function socialIconsHtml() {
+  return [['facebook', 'Facebook'], ['instagram', 'Instagram'], ['discord', 'Discord']].map(([k, label]) => {
+    const url = SITE[k] || '';
+    return /^https?:\/\//.test(url)
+      ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" class="social-mini" aria-label="${label}" title="${label}">${SOCIAL_ICONS[k]}</a>`
+      : `<span class="social-mini off" aria-label="${label}" title="${label} — odkaz doplň v client/site-config.js">${SOCIAL_ICONS[k]}</span>`;
+  }).join('');
+}
+
 function footerHtml() {
-  const socials = [['facebook', 'FB', 'Facebook'], ['instagram', 'IG', 'Instagram'], ['discord', 'DC', 'Discord']]
-    .filter(([k]) => /^https?:\/\//.test(SITE[k] || ''))
-    .map(([k, ab, label]) => `<a href="${esc(SITE[k])}" target="_blank" rel="noopener noreferrer" class="social-link" aria-label="${label}">${ab}</a>`)
-    .join('');
   return `
-    ${socials ? `<div class="social-links">${socials}</div>` : ''}
     <footer class="site-footer">
       <a href="#faq">Časté dotazy</a>
       <a href="#podminky">Obchodní podmínky</a>
@@ -1107,7 +1130,7 @@ function renderDailyGame() {
 
   function sendDailyWord() {
     const word = wordInput.value.trim();
-    if (!word || word === prefill) return;
+    if (!word) return;
     wordInput.value = prefill;
     wordInput.dispatchEvent(new Event('input', { bubbles: true }));
     socket.emit('submit_daily_word', { word });
@@ -1795,7 +1818,7 @@ function renderGame() {
 
   function sendWord() {
     const word = wordInput.value.trim();
-    if (!word || word === prefill) return;
+    if (!word) return;
     if (game.turn !== game.youAre) { inputFeedback('bad', 'Teď je na tahu soupeř.'); return; }
     wordInput.value = prefill;
     wordInput.dispatchEvent(new Event('input', { bubbles: true }));

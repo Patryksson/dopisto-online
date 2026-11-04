@@ -3,6 +3,7 @@ const { customPattern, isValidWord, generatePattern, matchesPattern, patternInst
 const store = require('./store');
 const { sanitizeNickname, cleanWord, attachSocketGuard } = require('./security');
 const { dailyBonusForDate, checkDailyBonus, publicBonus, DAILY_BONUS_EXTRA_MS } = require('./dailyBonus');
+const { setupBR, startBRLoop } = require('./br');
 
 const MODES = [2, 'middle', 'speed'];
 const BANK_TIME_BY_MODE = { 2: 90000, middle: 90000, speed: 60000 };
@@ -109,6 +110,7 @@ function tryMatchQueue(io, mode) {
 }
 
 function startMatchmakingLoop(io) {
+  startBRLoop(io);
   setInterval(() => {
     for (const mode of MODES) {
       while (tryMatchQueue(io, mode)) { /* pokracuj */ }
@@ -120,6 +122,7 @@ function setupGame(io, socket) {
   socket.data.nickname = null;
   socket.data.lobbyCode = null;
   attachSocketGuard(socket);
+  setupBR(io, socket);
 
   // Vyčistí přezdívku; při zamítnutí pošle klientovi důvod a vrátí null.
   function acceptNickname(raw) {

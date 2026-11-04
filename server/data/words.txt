@@ -8295,6 +8295,7 @@ beauvoir
 beauvoirová
 bebar
 bebarová
+bebe
 bebej
 bebejová
 bebek
@@ -9409,6 +9410,7 @@ betain
 betakarotén
 betalainový
 betanin
+betano
 betatester
 betatron
 betaverze
@@ -38482,6 +38484,7 @@ elmerová
 elner
 elnerová
 elokvence
+elon
 elongace
 elox
 eloxace
@@ -38505,6 +38508,7 @@ elster
 elsterová
 elstner
 elstnerová
+elton
 eltner
 eltnerová
 eltschkner
@@ -81584,8 +81588,10 @@ kratochvíl
 kratochvíla
 kratochvíle
 kratochvílová
+kratom
 kratonohy
 kratonožský
+kratos
 kratoška
 kratošková
 kratschmer
@@ -100024,6 +100030,7 @@ menstruující
 mensura
 ment
 mentalismus
+mentalista
 mentalistický
 mentalita
 mentberger
@@ -113280,6 +113287,8 @@ nejistění
 nejistět
 nejl
 nejlová
+nejlepší
+nejlépe
 nejman
 nejmanová
 nejmíň
@@ -142126,6 +142135,7 @@ pomeislová
 pomeje
 pomejová
 pomejův
+pomelo
 pomelu
 pomenší
 pomeranč
@@ -167706,6 +167716,7 @@ robčice
 robčický
 robčin
 robě
+robstav
 roca
 roch
 rochefoucauld
@@ -167832,6 +167843,7 @@ rodáková
 rodící
 roděj
 rodějová
+roe
 roedl
 roedlová
 roentgen
@@ -167969,6 +167981,7 @@ roháč
 roháček
 roháčková
 roháčová
+roi
 roik
 roiková
 roith
@@ -168316,6 +168329,7 @@ rory
 roráty
 rorýs
 rorýsí
+ros
 rosa
 rosalia
 rosario
@@ -170659,6 +170673,7 @@ rozmajzl
 rozmajzlová
 rozman
 rozmanit
+rozmanitost
 rozmanitová
 rozmanitý
 rozmanitější
