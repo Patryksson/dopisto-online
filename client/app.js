@@ -381,7 +381,8 @@ const RULES_HTML = `
     <li>Hraje 2 až 5 hráčů, sedí v kruhu a střídají se po směru. Hra se
       spustí, jakmile je plno (veřejná fronta po 45 s i od 3 hráčů).</li>
     <li>Každý má <b>2 životy ❤</b>. Na každý tah je 15 s, s každým kolem
-      (jedna otočka všech) o 1 s méně, nejméně 5 s.</li>
+      (jedna otočka všech) o 1 s méně, nejméně 5 s. Po každé změně zadání se
+      čas vrátí zpět na 15 s a zase ubývá.</li>
     <li>Zadání může být 1 písmeno, 2 písmena nebo „uprostřed". Slova se nesmí
       opakovat. Tresty (−1 s / −3 s) se odečítají z času na aktuální tah.</li>
     <li>Kdo nestihne odpovědět, přijde o život a zadání se změní — po

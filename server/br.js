@@ -21,7 +21,7 @@ const MAX_LIVES = 3;              // 2 životy + 1 bonusové srdce
 const METER_GOAL = 3;             // tolik splněných denních bonusů naplní metr = bonusové srdce
 
 const BASE_TURN_MS = 15000;       // čas na tah v 1. kole
-const ROUND_STEP_MS = 1000;       // každé kolo o tolik méně
+const ROUND_STEP_MS = 1000;       // každé kolo o tolik méně (po změně zadání se začíná znovu od 15 s)
 const MIN_TURN_MS = 5000;         // pod tuto hranici se nejde (jinak by to nešlo stihnout)
 
 const REVEAL_MS = 3500;           // odpočet před úplným začátkem (stejně jako u ostatních režimů)
@@ -157,8 +157,10 @@ function handleTimeout(io, room) {
 
   if (aliveCount(room) <= 1) { endGame(io, room, { type: 'timeout', seat: idx, eliminated, saved }); return; }
 
-  countStep(room);
   changePattern(room);
+  // Nové zadání = čas na tah se vrací na výchozích 15 s a zase se každé kolo zkracuje.
+  room.round = 1;
+  room.steps = 0;
   room.nextTurn = nextAlive(room, idx, room.dir);
   room.phase = 'break';
   room.breakEndsAt = Date.now() + BREAK_MS;
