@@ -206,6 +206,11 @@ function brRender(force) {
   }
   document.body.style.setProperty('--br-rgb', col.rgb);
   document.body.classList.add('br-live');
+  // Klávesnice (mimo #app) má vždy barvu, kterou máš ty — nemění se podle toho, kdo je na tahu.
+  const myCol = brColor(br.youAre);
+  document.body.style.setProperty('--vk-main', myCol.hex);
+  document.body.style.setProperty('--vk-fg', myCol.soft);
+  document.body.style.setProperty('--vk-bg', `rgba(${myCol.rgb}, .2)`);
 
   q('brRound').textContent = `Kolo ${st.round} · ${Math.round(st.turnMs / 1000)} s na tah`;
   q('brDir').innerHTML = st.dir === 1 ? '↻ po směru' : '↺ proti směru';
@@ -490,4 +495,9 @@ socket.on('br_rejoin_failed', () => {
 });
 
 // Barevné pozadí platí jen ve hře — na jiných obrazovkách se vypne.
-setInterval(() => { if (brScreen !== 'game' && document.body.classList.contains('br-live')) document.body.classList.remove('br-live'); }, 400);
+setInterval(() => {
+  if (brScreen !== 'game' && document.body.classList.contains('br-live')) {
+    document.body.classList.remove('br-live');
+    ['--vk-main', '--vk-fg', '--vk-bg', '--br-rgb'].forEach(k => document.body.style.removeProperty(k));
+  }
+}, 400);
