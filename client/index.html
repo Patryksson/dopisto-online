@@ -694,7 +694,7 @@ body.has-vk .wi-field input{caret-color:var(--accent)}
   .br-seat.me .br-name { color: var(--accent-soft); }
   .br-hearts { font-size: 13px; line-height: 1.2; margin-top: 2px; white-space: nowrap; }
   .br-heart { color: rgba(255,255,255,.18); }
-  .br-heart.on { color: var(--accent); }
+  .br-heart.on { color: #ff3b30; }
   .br-heart.bonus { opacity: .55; }
   .br-heart.bonus.on { color: #ffc93c; opacity: 1; text-shadow: 0 0 8px rgba(255,201,60,.7); }
   .br-place { font-size: 10px; color: var(--muted); }
@@ -724,6 +724,23 @@ body.has-vk .wi-field input{caret-color:var(--accent)}
   .br-rank-name { flex: 1; text-align: left; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .br-rank-words { color: var(--muted); font-size: 11px; }
   @media (max-width: 380px) { .br-ring { height: 310px; } .br-center .letter-tile { width: 26px; height: 30px; font-size: 13px; } .br-timer { font-size: 34px; } }
+
+  /* Barvy hráčů v Battle Royale */
+  .br-card { --br-rgb: 255,59,48; }
+  body.br-live { background: radial-gradient(circle at 50% 18%, rgba(var(--br-rgb), .2), transparent 60%), radial-gradient(circle at 88% 92%, rgba(255,255,255,.04), transparent 50%), var(--paper); transition: background .4s; }
+  .br-card { border-color: rgba(var(--br-rgb), .45); transition: border-color .3s; }
+  .br-card .turn-status.mine { border-color: var(--accent); background: linear-gradient(180deg, rgba(var(--br-rgb), .24), rgba(var(--br-rgb), .08)); box-shadow: 0 0 18px rgba(var(--br-rgb), .4); animation: none; }
+  .br-card .daily-bonus-chip { border-color: rgba(var(--br-rgb), .55); background: rgba(var(--br-rgb), .08); }
+  .br-card .daily-bonus-chip .dbc-ic { color: var(--accent); }
+  .br-card .turn-timer-bar.urgent, .br-timer.urgent { background: #ff3b30; }
+  .br-timer.urgent { background: none; color: #ff3b30; }
+  .br-card .turn-timer-bar { background: var(--accent); }
+  .br-seat { border-color: rgba(var(--pcrgb), .5); }
+  .br-seat .br-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--pc); margin-right: 5px; vertical-align: middle; box-shadow: 0 0 6px var(--pc); }
+  .br-seat.me .br-name { color: var(--ink); }
+  .br-seat.active { border-color: var(--pc); background: linear-gradient(180deg, rgba(var(--pcrgb), .3), rgba(var(--pcrgb), .1)); box-shadow: 0 0 20px rgba(var(--pcrgb), .6); }
+  .br-seat.next { border-color: var(--pc); }
+  .br-seat.me { border-width: 2px; }
 </style>
 </head>
 <body>
@@ -731,7 +748,7 @@ body.has-vk .wi-field input{caret-color:var(--accent)}
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="site-config.js"></script>
-<script src="app.js?v=20261104b"></script>
-<script src="br.js?v=20261104b"></script>
+<script src="app.js?v=20261104d"></script>
+<script src="br.js?v=20261104d"></script>
 </body>
 </html>

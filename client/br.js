@@ -7,6 +7,19 @@ let brScreen = 'none'; // none | menu | joining | queue | lobby | game | result
 
 const BR_HEART = '❤';
 
+// Barvy hráčů — podle toho, kdo je na tahu, se mění barva celého rozhraní.
+const BR_COLORS = {
+  blue:   { name: 'Modrá',    hex: '#3b82f6', soft: '#7aa8f8', rgb: '59,130,246' },
+  green:  { name: 'Zelená',   hex: '#22c55e', soft: '#62da8b', rgb: '34,197,94' },
+  yellow: { name: 'Žlutá',    hex: '#facc15', soft: '#fcdc5e', rgb: '250,204,21' },
+  purple: { name: 'Fialová',  hex: '#a855f7', soft: '#c08bf9', rgb: '168,85,247' },
+  orange: { name: 'Oranžová', hex: '#fb923c', soft: '#fcb072', rgb: '251,146,60' },
+};
+function brColor(seat) {
+  const p = br && br.st && br.st.players[seat];
+  return (p && BR_COLORS[p.color]) || BR_COLORS.blue;
+}
+
 function brName(seat) {
   const p = br && br.st && br.st.players[seat];
   return p ? esc(p.name) : '?';
@@ -94,8 +107,8 @@ function brRingHtml() {
     const upNext = st.phase !== 'turn' && st.nextTurn === i && p.alive;
     const cls = ['br-seat', active ? 'active' : '', upNext ? 'next' : '', !p.alive ? 'dead' : '', i === br.youAre ? 'me' : '', !p.connected && p.alive ? 'offline' : ''].join(' ');
     return `
-      <div class="${cls}" id="brSeat${i}" style="left:${x.toFixed(1)}%; top:${y.toFixed(1)}%">
-        <div class="br-name">${p.alive ? '' : '💀 '}${esc(p.name)}${!p.connected && p.alive ? ' ⚠' : ''}</div>
+      <div class="${cls}" id="brSeat${i}" style="left:${x.toFixed(1)}%; top:${y.toFixed(1)}%; --pc:${brColor(i).hex}; --pcrgb:${brColor(i).rgb}">
+        <div class="br-name"><span class="br-dot"></span>${p.alive ? '' : '💀 '}${esc(p.name)}${!p.connected && p.alive ? ' ⚠' : ''}</div>
         <div class="br-hearts">${p.alive ? brHeartsHtml(p, st.maxLives) : `<span class="br-place">${p.place}. místo</span>`}</div>
         ${p.alive ? brMeterHtml(p, st.meterGoal) : ''}
       </div>`;
@@ -182,6 +195,18 @@ function brRender(force) {
   const me = st.players[br.youAre];
   const q = (id) => document.getElementById(id);
 
+  // Barva rozhraní = barva hráče, který je právě na tahu (mezi tahy toho, kdo bude následovat).
+  const actor = st.phase === 'turn' ? st.turn : st.nextTurn;
+  const col = brColor(actor);
+  const card = document.querySelector('.br-card');
+  if (card) {
+    card.style.setProperty('--accent', col.hex);
+    card.style.setProperty('--accent-soft', col.soft);
+    card.style.setProperty('--br-rgb', col.rgb);
+  }
+  document.body.style.setProperty('--br-rgb', col.rgb);
+  document.body.classList.add('br-live');
+
   q('brRound').textContent = `Kolo ${st.round} · ${Math.round(st.turnMs / 1000)} s na tah`;
   q('brDir').innerHTML = st.dir === 1 ? '↻ po směru' : '↺ proti směru';
   q('brSeats').innerHTML = brRingHtml();
@@ -206,7 +231,7 @@ function brRender(force) {
   const mine = st.phase === 'turn' && st.turn === br.youAre && me.alive;
   const status = q('brStatus');
   status.classList.toggle('mine', mine);
-  if (st.phase === 'reveal') status.innerHTML = `Začíná: <b>${brName(st.nextTurn)}</b>`;
+  if (st.phase === 'reveal') status.innerHTML = `Tvoje barva: <b class="br-mycolor" style="color:${brColor(br.youAre).hex}">${brColor(br.youAre).name}</b> · začíná <b>${brName(st.nextTurn)}</b>`;
   else if (st.phase === 'break') status.innerHTML = `Nové zadání · pokračuje <b>${brName(st.nextTurn)}</b>`;
   else status.innerHTML = mine ? '<span class="ts-dot"></span> Jsi na tahu — piš!' : `Na tahu je ${brName(st.turn)}…`;
 
@@ -463,3 +488,6 @@ socket.on('br_rejoin_failed', () => {
   br = null;
   renderMenu('Spojení s Battle Royale se nepodařilo obnovit — hra mezitím skončila.');
 });
+
+// Barevné pozadí platí jen ve hře — na jiných obrazovkách se vypne.
+setInterval(() => { if (brScreen !== 'game' && document.body.classList.contains('br-live')) document.body.classList.remove('br-live'); }, 400);

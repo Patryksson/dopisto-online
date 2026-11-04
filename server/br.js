@@ -33,6 +33,9 @@ const PENALTY_NOT_IN_DICT_MS = 1000;
 const PENALTY_ALREADY_USED_MS = 3000;
 const PENALTY_WRONG_PATTERN_MS = 3000;
 
+// Barva hráče — každý v kruhu má jinou, náhodně přidělenou před zápasem.
+const COLORS = ['blue', 'green', 'yellow', 'purple', 'orange'];
+
 const PATTERN_MODES = [2, 'middle', 'speed']; // zadání se losuje ze všech tří režimů
 
 const queue = [];                 // veřejná fronta { socket, nickname, joinedAt }
@@ -96,7 +99,7 @@ function publicState(room) {
     bonus: bonusInfo(room.dailyBonus),
     players: room.players.map((p, i) => ({
       seat: i, name: p.nickname, lives: p.lives, alive: p.alive, meter: p.meter,
-      pass: p.pass, reverse: p.reverse, connected: p.connected && !p.left, left: p.left, place: p.place,
+      color: p.color, pass: p.pass, reverse: p.reverse, connected: p.connected && !p.left, left: p.left, place: p.place,
     })),
   };
 }
@@ -247,9 +250,14 @@ function startRoom(io, entries) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
+  const colors = COLORS.slice();
+  for (let i = colors.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [colors[i], colors[j]] = [colors[j], colors[i]];
+  }
   // Stejné přezdívky v jednom kruhu se rozliší.
   const seen = new Map();
-  const players = shuffled.map(e => {
+  const players = shuffled.map((e, idx) => {
     const base = e.nickname;
     const k = base.toLowerCase();
     const n = (seen.get(k) || 0) + 1;
@@ -257,7 +265,7 @@ function startRoom(io, entries) {
     return {
       socket: e.socket, nickname: n > 1 ? `${base} (${n})` : base,
       token: crypto.randomBytes(8).toString('hex'),
-      lives: START_LIVES, alive: true, connected: true, left: false, disconnectedAt: 0,
+      color: colors[idx], lives: START_LIVES, alive: true, connected: true, left: false, disconnectedAt: 0,
       meter: 0, pass: true, reverse: true, words: 0, place: null,
     };
   });
