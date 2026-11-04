@@ -9,11 +9,11 @@ const BR_HEART = '❤';
 
 // Barvy hráčů — podle toho, kdo je na tahu, se mění barva celého rozhraní.
 const BR_COLORS = {
-  blue:   { name: 'Modrá',    hex: '#3b82f6', soft: '#7aa8f8', rgb: '59,130,246' },
-  green:  { name: 'Zelená',   hex: '#22c55e', soft: '#62da8b', rgb: '34,197,94' },
-  yellow: { name: 'Žlutá',    hex: '#facc15', soft: '#fcdc5e', rgb: '250,204,21' },
-  purple: { name: 'Fialová',  hex: '#a855f7', soft: '#c08bf9', rgb: '168,85,247' },
-  orange: { name: 'Oranžová', hex: '#fb923c', soft: '#fcb072', rgb: '251,146,60' },
+  blue:   { name: 'Modrá',    hex: '#3b82f6', soft: '#7aa8f8', on: '#fff', rgb: '59,130,246' },
+  green:  { name: 'Zelená',   hex: '#22c55e', soft: '#62da8b', on: '#06240f', rgb: '34,197,94' },
+  yellow: { name: 'Žlutá',    hex: '#facc15', soft: '#fcdc5e', on: '#2a2100', rgb: '250,204,21' },
+  purple: { name: 'Fialová',  hex: '#a855f7', soft: '#c08bf9', on: '#fff', rgb: '168,85,247' },
+  orange: { name: 'Oranžová', hex: '#fb923c', soft: '#fcb072', on: '#2b1200', rgb: '251,146,60' },
 };
 function brColor(seat) {
   const p = br && br.st && br.st.players[seat];
@@ -211,6 +211,9 @@ function brRender(force) {
   document.body.style.setProperty('--vk-main', myCol.hex);
   document.body.style.setProperty('--vk-fg', myCol.soft);
   document.body.style.setProperty('--vk-bg', `rgba(${myCol.rgb}, .2)`);
+  document.body.style.setProperty('--vk-rgb', myCol.rgb);
+  document.body.style.setProperty('--vk-on', myCol.on);
+  document.body.classList.add('vk-themed');
 
   q('brRound').textContent = `Kolo ${st.round} · ${Math.round(st.turnMs / 1000)} s na tah`;
   q('brDir').innerHTML = st.dir === 1 ? '↻ po směru' : '↺ proti směru';
@@ -497,7 +500,7 @@ socket.on('br_rejoin_failed', () => {
 // Barevné pozadí platí jen ve hře — na jiných obrazovkách se vypne.
 setInterval(() => {
   if (brScreen !== 'game' && document.body.classList.contains('br-live')) {
-    document.body.classList.remove('br-live');
-    ['--vk-main', '--vk-fg', '--vk-bg', '--br-rgb'].forEach(k => document.body.style.removeProperty(k));
+    document.body.classList.remove('br-live', 'vk-themed');
+    ['--vk-main', '--vk-fg', '--vk-bg', '--vk-rgb', '--vk-on', '--br-rgb'].forEach(k => document.body.style.removeProperty(k));
   }
 }, 400);

@@ -629,6 +629,16 @@ body.has-vk .wi-field input{caret-color:var(--accent)}
 .vk-alt{min-width:calc(var(--kh)*.88);height:calc(var(--kh)*1);display:flex;align-items:center;justify-content:center;font-size:calc(var(--kh)*.5);font-weight:600;border-radius:8px;color:var(--ink,#fff)}
 .vk-alt.hot{background:var(--vk-main,var(--accent));color:#fff}
 
+/* Klávesnice v barvě hráče (Battle Royale) — celá klávesnice, ne jen pár kláves */
+body.vk-themed .vk{background:linear-gradient(rgba(var(--vk-rgb),.18),rgba(var(--vk-rgb),.18)),#12121a;border-top:2px solid var(--vk-main);box-shadow:0 -8px 28px rgba(var(--vk-rgb),.3)}
+body.vk-themed .vk-cap{background:linear-gradient(rgba(var(--vk-rgb),.22),rgba(var(--vk-rgb),.22)),#242432}
+body.vk-themed .vk-dia .vk-cap,body.vk-themed .vk-acc .vk-cap{background:linear-gradient(rgba(var(--vk-rgb),.42),rgba(var(--vk-rgb),.42)),#1a1a24;color:var(--vk-fg)}
+body.vk-themed .vk-key.down .vk-cap,body.vk-themed .vk-dia .vk-key.down .vk-cap,body.vk-themed .vk-acc.down .vk-cap{background:linear-gradient(rgba(var(--vk-rgb),.6),rgba(var(--vk-rgb),.6)),#242432}
+body.vk-themed .vk-send .vk-cap{background:var(--vk-main);color:var(--vk-on)}
+body.vk-themed .vk-send.down .vk-cap{background:var(--vk-main);filter:brightness(.8)}
+body.vk-themed .vk-prev,body.vk-themed .vk-pop{border-color:var(--vk-main)}
+body.vk-themed .vk-alt.hot{background:var(--vk-main);color:var(--vk-on)}
+
 .custom-pat{margin:10px 0 16px;text-align:left}
 .custom-pat label{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
 .custom-pat label small{text-transform:none;letter-spacing:0}
@@ -748,7 +758,7 @@ body.has-vk .wi-field input{caret-color:var(--accent)}
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="site-config.js"></script>
-<script src="app.js?v=20261104e"></script>
-<script src="br.js?v=20261104e"></script>
+<script src="app.js?v=20261104f"></script>
+<script src="br.js?v=20261104f"></script>
 </body>
 </html>
