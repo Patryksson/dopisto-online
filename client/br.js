@@ -122,7 +122,7 @@ function renderBrGame() {
   const st = br.st;
   const me = st.players[br.youAre];
   app.innerHTML = `
-    <div class="card game-card br-card">
+    <div class="card game-card br-card fit">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       <div class="br-head">
         <span class="br-round" id="brRound"></span>

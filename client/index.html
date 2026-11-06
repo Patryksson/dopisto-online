@@ -639,6 +639,31 @@ body.vk-themed .vk-send.down .vk-cap{background:var(--vk-main);filter:brightness
 body.vk-themed .vk-prev,body.vk-themed .vk-pop{border-color:var(--vk-main)}
 body.vk-themed .vk-alt.hot{background:var(--vk-main);color:var(--vk-on)}
 
+/* Battle Royale na mobilu s klávesnicí: kompaktní layout, ať je vidět kruh, srdce i psané slovo */
+body.has-vk .br-card{padding-top:10px;padding-bottom:8px}
+body.has-vk .br-card .daily-bonus-chip,
+body.has-vk .br-card .used-count,
+body.has-vk .br-card .game-footer,
+body.has-vk .br-card .feed,
+body.has-vk .br-card .br-pw small{display:none}
+body.has-vk .br-head{margin-bottom:0}
+body.has-vk .br-ring{height:clamp(150px,calc(100vh - var(--vk-h,250px) - 235px),330px);margin:2px 0}
+@supports (height:100dvh){body.has-vk .br-ring{height:clamp(150px,calc(100dvh - var(--vk-h,250px) - 235px),330px)}}
+body.has-vk .br-seat{padding:3px 3px 3px;border-radius:10px}
+body.has-vk .br-name{font-size:10px}
+body.has-vk .br-hearts{font-size:12px;margin-top:0}
+body.has-vk .br-meter{margin-top:2px}
+body.has-vk .br-pip{height:3px;width:12px}
+body.has-vk .br-center .letter-tile{width:24px;height:28px;font-size:13px}
+body.has-vk .br-timer{font-size:28px}
+body.has-vk .turn-timer-wrap{margin:2px 0}
+body.has-vk .br-card .turn-status{padding:7px 10px;margin:4px 0;font-size:12px}
+body.has-vk .br-card .last-word{min-height:0;margin:2px 0;font-size:13px}
+body.has-vk .br-power{margin:6px 0 2px}
+body.has-vk .br-pw{padding:6px 4px;flex-direction:row;justify-content:center}
+body.has-vk .br-pw b{font-size:11px}
+body.has-vk .br-spectate{margin:0 0 4px}
+
 .custom-pat{margin:10px 0 16px;text-align:left}
 .custom-pat label{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
 .custom-pat label small{text-transform:none;letter-spacing:0}
@@ -751,6 +776,73 @@ body.vk-themed .vk-alt.hot{background:var(--vk-main);color:var(--vk-on)}
   .br-seat.active { border-color: var(--pc); background: linear-gradient(180deg, rgba(var(--pcrgb), .3), rgba(var(--pcrgb), .1)); box-shadow: 0 0 20px rgba(var(--pcrgb), .6); }
   .br-seat.next { border-color: var(--pc); }
   .br-seat.me { border-width: 2px; }
+
+  /* Hlavní stránka na mobilu: vejde se celá na obrazovku bez scrollování.
+     Rozestupy se plynule zmenšují podle výšky displeje (vh). */
+  @media (max-width: 600px) {
+    body:has(.page.home) { padding: 8px; }
+    .page.home { gap: clamp(6px, 1.2vh, 14px); }
+    .page.home .card { padding: clamp(10px, 1.6vh, 16px) 20px clamp(8px, 1.2vh, 14px); }
+    .page.home .logo { width: clamp(140px, 29vh, 270px); margin: 0 auto; }
+    .page.home .divider { margin: 2px auto clamp(2px, 1.8vh, 16px); }
+    .page.home .nick-intro { margin: clamp(2px, 1.4vh, 12px) 0 2px; }
+    .page.home .nickname-box { margin: clamp(2px, 1.2vh, 10px) 0 2px; }
+    .page.home .nickname-box input { padding-top: clamp(8px, 1.4vh, 12px); padding-bottom: clamp(8px, 1.4vh, 12px); }
+    .page.home .error { margin: 0 0 2px; min-height: 12px; }
+    .page.home .menu-list { margin-bottom: 2px; }
+    .page.home .menu-item { padding-top: clamp(9px, 1.9vh, 14px); padding-bottom: clamp(9px, 1.9vh, 14px); }
+    .page.home .daily-card { margin: clamp(4px, 1.8vh, 16px) 0 clamp(2px, 1.2vh, 14px); padding: clamp(6px, 1.5vh, 14px) 12px 6px; }
+    .page.home .dc-pattern { font-size: clamp(26px, 5vh, 44px); margin: 2px 0 0; }
+    .page.home .dc-bonus { margin-bottom: clamp(4px, .8vh, 10px); font-size: 11.5px; }
+    .page.home .daily-card .streak-chip { margin: 4px 0 2px; }
+    .page.home .rules { margin-top: clamp(0px, .7vh, 10px); padding-top: 2px; }
+    .page.home .rules-summary { padding-top: clamp(6px, 1.4vh, 11px); padding-bottom: clamp(6px, 1.4vh, 11px); }
+    .page.home .site-footer { padding: 0 6px 0; gap: 4px 14px; }
+    .page.home .version-row { padding-bottom: 0; }
+  }
+  @media (max-width: 600px) and (max-height: 660px) {
+    .page.home .divider { display: none; }
+    .page.home .logo { width: 130px; }
+    .page.home .dc-bonus { margin-bottom: 4px; }
+  }
+
+  /* Herní obrazovky na mobilu: karta vyplní výšku displeje (nad klávesnicí), historie slov
+     se scrolluje uvnitř a nikdy nenatahuje stránku. */
+  @media (max-width: 600px) {
+    body:has(.card.fit) { padding: 8px 8px 8px; align-items: flex-start; }
+    body.has-vk:has(.card.fit) { padding-bottom: calc(var(--vk-h, 250px) + 8px); }
+    .card.fit { display: flex; flex-direction: column; height: calc(100vh - 16px); padding: 12px 16px 10px; overflow: hidden; }
+    body.has-vk .card.fit { height: calc(100vh - var(--vk-h, 250px) - 16px); }
+    @supports (height: 100dvh) {
+      .card.fit { height: calc(100dvh - 16px); }
+      body.has-vk .card.fit { height: calc(100dvh - var(--vk-h, 250px) - 16px); }
+    }
+    .card.fit > * { flex: 0 0 auto; }
+    .card.fit .feed { flex: 1 1 0; min-height: 36px; max-height: none; margin-top: 8px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    .card.fit .letter-tiles { margin: 2px 0 clamp(4px, 1.2vh, 12px); }
+    .card.fit .letter-tile { width: clamp(30px, 5.2vh, 42px); height: clamp(32px, 5.6vh, 46px); font-size: clamp(15px, 2.6vh, 20px); }
+    .card.fit .clocks { margin: clamp(4px, 1vh, 12px) 0 clamp(4px, .8vh, 10px); }
+    .card.fit .clock { padding-top: 6px; padding-bottom: 6px; }
+    .card.fit .turn-status { padding: 7px 10px; margin: 0 0 6px; font-size: 13px; }
+    .card.fit .daily-bonus-chip { margin: 4px auto; padding: 4px 10px; font-size: 11px; }
+    .card.fit .used-count { margin: 2px 0 6px; }
+    .card.fit .game-footer { margin-top: 2px; }
+    .card.fit .last-word { min-height: 0; margin: 2px 0 4px; }
+  }
+  @media (max-width: 600px) {
+    body.has-vk .card.fit .daily-bonus-chip,
+    body.has-vk .card.fit .used-count,
+    body.has-vk .card.fit .reaction-bar { display: none; }
+    body.has-vk .card.fit .game-card .clocks,
+    body.has-vk .card.fit .clocks { margin: 2px 0 4px; }
+    body.has-vk .card.fit .clock .time { font-size: 22px; }
+    body.has-vk .card.fit .letter-tile { width: 30px; height: 32px; font-size: 15px; }
+    body.has-vk .card.fit .turn-timer-wrap { margin: 2px 0; }
+  }
+  @media (max-width: 600px) {
+    .card.fit .br-ring { flex: 2 1 0; height: auto; min-height: 150px; max-height: 330px; }
+    .card.fit .br-ring ~ .feed { flex: 1 1 0; }
+  }
 </style>
 </head>
 <body>
@@ -758,7 +850,7 @@ body.vk-themed .vk-alt.hot{background:var(--vk-main);color:var(--vk-on)}
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="site-config.js"></script>
-<script src="app.js?v=20261104f"></script>
-<script src="br.js?v=20261104f"></script>
+<script src="app.js?v=20261106d"></script>
+<script src="br.js?v=20261106d"></script>
 </body>
 </html>

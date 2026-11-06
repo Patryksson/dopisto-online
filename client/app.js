@@ -495,7 +495,7 @@ function renderMenu(notice) {
   const saved = getSavedDailyResult();
 
   app.innerHTML = `
-    <div class="page">
+    <div class="page home">
     <div class="card">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       <img class="logo" src="logo.png" alt="Dopišto" />
@@ -1123,7 +1123,7 @@ function renderDailyReveal(data) {
 
 function renderDailyGame() {
   app.innerHTML = `
-    <div class="card">
+    <div class="card fit">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       ${patternTilesHtml(dailyState.pattern)}
       ${dailyBonusChipHtml(dailyState.dailyBonus, 'gameBonusChip')}
@@ -1790,7 +1790,7 @@ function renderGame() {
   ` : '';
 
   app.innerHTML = `
-    <div class="card game-card">
+    <div class="card game-card fit">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       ${patternDisplayBlock(game.pattern)}
       ${dailyBonusChipHtml(game.dailyBonus, 'gameBonusChip')}
