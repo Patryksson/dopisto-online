@@ -34,7 +34,7 @@ function renderBrMenu(notice) {
 
 function renderBrWait(text) {
   app.innerHTML = `
-    <div class="card" style="text-align:center">
+    <div class="card mid" style="text-align:center">
       <div class="spinner"></div>
       <p style="color:var(--ink-soft); font-size:13px">${esc(text)}</p>
       <button class="secondary small" id="brCancelBtn" style="width:100%; margin-top:10px">Zrušit</button>
@@ -45,7 +45,7 @@ function renderBrWait(text) {
 function renderBrQueue(count) {
   brScreen = 'queue';
   app.innerHTML = `
-    <div class="card" style="text-align:center">
+    <div class="card mid" style="text-align:center">
       <p style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:0">Battle Royale</p>
       <div class="spinner"></div>
       <p style="color:var(--ink-soft); font-size:13px; margin-bottom:6px">Hledám hráče…</p>
@@ -61,7 +61,7 @@ function renderBrLobby(d) {
   const rows = d.players.map((n, i) => `<div class="br-lobby-player"><span>${i === 0 ? '👑' : '👤'}</span><b>${esc(n)}</b></div>`).join('')
     + Array.from({ length: d.max - d.players.length }, () => '<div class="br-lobby-player empty"><span>·</span><i>volné místo</i></div>').join('');
   app.innerHTML = `
-    <div class="card" style="text-align:center">
+    <div class="card mid" style="text-align:center">
       <p style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:0">Battle Royale · lobby</p>
       <div class="lobby-code" id="lobbyCodeNum">${esc(d.code)}</div>
       <p style="color:var(--muted); font-size:11px">Pošli tento kód kamarádům, ať ho zadají v Hrát online → Royale → „Připojit“.</p>
@@ -130,6 +130,7 @@ function renderBrGame() {
       </div>
       ${dailyBonusChipHtml(st.bonus, 'gameBonusChip').replace('· +3 s', '· metr ❤')}
       <div class="br-ring" id="brRing">
+        <svg class="br-dir-svg" id="brDirSvg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><ellipse cx="50" cy="48" rx="39" ry="40"/></svg>
         <div class="br-center">
           <div id="brPattern"></div>
           <div class="br-timer" id="brTimer"></div>
@@ -217,6 +218,8 @@ function brRender(force) {
 
   q('brRound').textContent = `Kolo ${st.round} · ${Math.round(st.turnMs / 1000)} s na tah`;
   q('brDir').innerHTML = st.dir === 1 ? '↻ po směru' : '↺ proti směru';
+  const dsvg = q('brDirSvg');
+  if (dsvg) dsvg.classList.toggle('ccw', st.dir === -1);
   q('brSeats').innerHTML = brRingHtml();
 
   const patKey = st.pattern.type + st.pattern.value;
@@ -328,6 +331,7 @@ function brTimers() {
     const s2 = Math.max(1, Math.ceil(st.breakLeft / 1000));
     if (br.brnSec !== s2) { br.brnSec = s2; cn.textContent = String(s2); cn.classList.remove('pulse'); void cn.offsetWidth; cn.classList.add('pulse'); }
   }
+  fxDanger(st.phase === 'turn' && st.turnLeft < 3000);
   const t = document.getElementById('brTimer');
   const bar = document.getElementById('brBar');
   if (!t) return;
@@ -371,6 +375,7 @@ function brHandleEvent(ev, prevPlayers) {
   } else if (ev.type === 'timeout') {
     brSeatFlash(ev.seat, 'hit');
     fxHeartBurst(document.getElementById('brSeat' + ev.seat), ev.eliminated);
+    if (ev.eliminated) { const pc = brColor(br.st.players[ev.seat].color); fxShatter(document.getElementById('brSeat' + ev.seat), pc && pc.rgb); brSeatFlash(ev.seat, 'shatter'); }
     if (ev.seat === me) fxFlash('255,59,48');
     playPenalty();
     if (ev.seat === me) { vibrate([60, 40, 120]); const c = document.querySelector('.card'); if (c) { c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); } }
@@ -528,6 +533,8 @@ socket.on('br_over', (d) => {
   br.over = true;
   closeBrOverlay();
   hideReconnectOverlay();
+  fxDanger(false);
+  if (d.winnerSeat != null) { const w = document.getElementById('brSeat' + d.winnerSeat); if (w && !w.querySelector('.br-crown')) { w.classList.add('winner'); w.insertAdjacentHTML('afterbegin', '<span class="br-crown">👑</span>'); } }
   setTimeout(() => { if (br && br.over) renderBrResult(d); }, 1400);
   const ev = d.event;
   if (ev && ev.type === 'timeout') brBanner(ev.eliminated ? `💀 ${brName(ev.seat)} vypadl(a)!` : '', 'p1');

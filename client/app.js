@@ -1355,7 +1355,7 @@ function shareDailyResult(data) {
 // ==== Hledání soupeře (matchmaking) ====
 function renderSearching(nickname) {
   app.innerHTML = `
-    <div class="card" style="text-align:center">
+    <div class="card mid" style="text-align:center">
       <p style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:0">Režim: ${MODE_LABEL[selectedMode]}<span id="lobbyPatLine"></span></p>
       <div class="spinner"></div>
       <p style="color:var(--ink-soft); font-size:13px">Hledám soupeře…</p>
@@ -1373,7 +1373,7 @@ let currentLobbyCode = null;
 
 function renderLobbyWaiting() {
   app.innerHTML = `
-    <div class="card" style="text-align:center">
+    <div class="card mid" style="text-align:center">
       <p style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:0">Režim: ${MODE_LABEL[selectedMode]}<span id="lobbyPatLine"></span></p>
       <div class="spinner"></div>
       <p style="color:var(--ink-soft); font-size:13px; margin-bottom:0">Čekání na soupeře…</p>
@@ -1398,7 +1398,7 @@ function renderLobbyWaiting() {
 
 function renderJoining() {
   app.innerHTML = `
-    <div class="card" style="text-align:center">
+    <div class="card mid" style="text-align:center">
       <div class="spinner"></div>
       <p style="color:var(--ink-soft); font-size:13px">Připojuji se ke hře…</p>
       <button class="secondary small" id="cancelBtn" style="width:100%; margin-top:10px">Zrušit</button>
@@ -1888,6 +1888,10 @@ function updateClocksUI() {
     const t = oppEl.querySelector('.time');
     if (t) t.textContent = fmtTime(game.timeLeft[1 - game.youAre]);
   }
+
+  // Napětí: posledních 3 s mého času / tahu
+  const myTurn = game.turn === game.youAre && !game.finished;
+  fxDanger(myTurn && (hasTurnTimer ? game.turnTimer < 3000 : game.timeLeft[game.youAre] < 3000));
 
   if (hasTurnTimer) {
     const bar = document.getElementById('turnBar');

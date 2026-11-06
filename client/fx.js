@@ -71,3 +71,37 @@ function fxConfetti() {
     setTimeout(() => c.remove(), 5000);
   }
 }
+
+// Napětí: poslední sekundy tahu — červená vinětace a chvění času. Sama zhasne, když ji nikdo neobnovuje.
+let fxDangerAt = 0;
+function fxDanger(on) {
+  const b = document.body;
+  if (on) { fxDangerAt = Date.now(); b.classList.add('danger'); } else b.classList.remove('danger');
+}
+setInterval(() => {
+  if (document.body.classList.contains('danger') && Date.now() - fxDangerAt > 700) document.body.classList.remove('danger');
+}, 300);
+
+// Vyřazený hráč se rozpadne na úlomky v jeho barvě.
+function fxShatter(el, rgb) {
+  if (!el || fxReduced()) return;
+  const r = el.getBoundingClientRect();
+  const layer = fxLayer();
+  const cols = rgb ? [`rgb(${rgb})`, `rgba(${rgb},.7)`, '#ffffff'] : ['#ff3b30', '#ffffff'];
+  for (let i = 0; i < 22; i++) {
+    const s = document.createElement('i');
+    s.className = 'fx-shard';
+    const x = r.left + Math.random() * r.width, y = r.top + Math.random() * r.height;
+    s.style.left = x + 'px';
+    s.style.top = y + 'px';
+    s.style.background = cols[i % cols.length];
+    s.style.width = 5 + Math.random() * 9 + 'px';
+    s.style.height = 5 + Math.random() * 9 + 'px';
+    s.style.setProperty('--dx', (x - (r.left + r.width / 2)) * (1.2 + Math.random()) + 'px');
+    s.style.setProperty('--dy', 60 + Math.random() * 110 + 'px');
+    s.style.setProperty('--rot', (Math.random() * 540 - 270) + 'deg');
+    s.style.animationDelay = Math.random() * 80 + 'ms';
+    layer.appendChild(s);
+    setTimeout(() => s.remove(), 1300);
+  }
+}

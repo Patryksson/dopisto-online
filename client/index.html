@@ -855,7 +855,6 @@ body.has-vk .br-spectate{margin:0 0 4px}
   @media (max-width: 600px) {
     body.has-vk .card.fit .daily-bonus-chip,
     body.has-vk .card.fit .used-count,
-    body.has-vk .card.fit .reaction-bar { display: none; }
     body.has-vk .card.fit .game-card .clocks,
     body.has-vk .card.fit .clocks { margin: 2px 0 4px; }
     body.has-vk .card.fit .clock .time { font-size: 22px; }
@@ -869,6 +868,28 @@ body.has-vk .br-spectate{margin:0 0 4px}
 
   /* Efekty */
   #fxLayer { position: fixed; inset: 0; pointer-events: none; z-index: 9500; overflow: hidden; }
+  /* ---- napětí, rozpad, koruna, směr ---- */
+  body.danger::after { box-shadow: inset 0 0 90px 24px rgba(255,59,48,.55); animation: dangerPulse .5s ease-in-out infinite alternate; }
+  @keyframes dangerPulse { from { opacity: .55; } to { opacity: 1; } }
+  body.danger .turn-timer-wrap, body.danger .br-timer { animation: tremble .12s linear infinite; }
+  body.danger .turn-timer-bar { box-shadow: 0 0 10px #ff3b30; }
+  @keyframes tremble { 0%{ transform: translate(0,0) } 25%{ transform: translate(-1.5px,1px) } 50%{ transform: translate(1.5px,-1px) } 75%{ transform: translate(-1px,-1.5px) } 100%{ transform: translate(0,0) } }
+  .fx-shard { position: fixed; pointer-events: none; border-radius: 2px; animation: fxShard 1.1s cubic-bezier(.3,.6,.4,1) forwards; }
+  @keyframes fxShard { to { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; } }
+  .br-seat.shatter { animation: seatShatter .7s ease-out forwards; }
+  @keyframes seatShatter { 0%{ transform: translate(-50%,-50%) scale(1) } 30%{ transform: translate(-50%,-50%) scale(1.12) rotate(-3deg) } 100%{ transform: translate(-50%,-50%) scale(.92) } }
+  .br-seat.dead { border-style: dotted; background: rgba(255,255,255,.03); }
+  .br-seat { position: absolute; }
+  .br-crown { position: absolute; top: -17px; left: 50%; transform: translateX(-50%); font-size: 20px; animation: crownIn .6s cubic-bezier(.2,1.4,.4,1) both; filter: drop-shadow(0 0 6px gold); }
+  @keyframes crownIn { from { transform: translate(-50%,-30px) scale(.3); opacity: 0 } to { transform: translate(-50%,0) scale(1); opacity: 1 } }
+  .br-seat.winner { border-color: gold; box-shadow: 0 0 18px rgba(255,215,0,.6); }
+  .br-dir-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .br-dir-svg ellipse { fill: none; stroke: var(--accent); stroke-opacity: .55; stroke-width: 1.4; stroke-dasharray: 3 5; vector-effect: non-scaling-stroke; animation: dirFlow 1.4s linear infinite; }
+  .br-dir-svg.ccw ellipse { animation-direction: reverse; }
+  @keyframes dirFlow { to { stroke-dashoffset: -16; } }
+  @media (prefers-reduced-motion: reduce) { .br-dir-svg ellipse, body.danger::after, body.danger .br-timer, body.danger .turn-timer-wrap { animation: none; } }
+  body:has(.card.mid) { align-items: center; }
+  .card.mid { margin-top: 0; }
   .fx-heart { position: fixed; transform: translate(-50%, -50%); animation: fxFly .95s cubic-bezier(.2,.7,.3,1) forwards; color: #ff3b30; text-shadow: 0 0 10px rgba(255,59,48,.8); line-height: 1; }
   .fx-heart.broken { animation-name: fxBreak; animation-duration: 1.1s; }
   @keyframes fxFly { 0% { opacity: 1; transform: translate(-50%,-50%) scale(1) rotate(0); } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.4) rotate(var(--rot)); } }
@@ -910,8 +931,8 @@ body.has-vk .br-spectate{margin:0 0 4px}
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="site-config.js"></script>
-<script src="fx.js?v=20261107e"></script>
-<script src="app.js?v=20261107e"></script>
-<script src="br.js?v=20261107e"></script>
+<script src="fx.js?v=20261107f"></script>
+<script src="app.js?v=20261107f"></script>
+<script src="br.js?v=20261107f"></script>
 </body>
 </html>
