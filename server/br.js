@@ -25,7 +25,7 @@ const ROUND_STEP_MS = 1000;       // každé kolo o tolik méně (po změně zad
 const MIN_TURN_MS = 5000;         // pod tuto hranici se nejde (jinak by to nešlo stihnout)
 
 const REVEAL_MS = 3500;           // odpočet před úplným začátkem (stejně jako u ostatních režimů)
-const BREAK_MS = 3000;            // odpočet po změně zadání
+const BREAK_MS = 5000;            // odpočet po změně zadání
 const DISCONNECT_GRACE_MS = 20000;// po tolika ms bez spojení hráč vypadává
 
 // Tresty jako v ostatních režimech — tady se ale odečítají z času na aktuální tah.

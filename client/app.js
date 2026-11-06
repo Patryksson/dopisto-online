@@ -498,7 +498,7 @@ function renderMenu(notice) {
     <div class="page home">
     <div class="card">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
-      <img class="logo" src="logo.png" alt="Dopišto" />
+      <div class="logo-wrap"><img class="logo" src="logo.png" alt="Dopišto" /></div>
       <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
 
       ${nicknameBlockHtml()}
@@ -1946,6 +1946,7 @@ function renderResult(data) {
 
   playDefeat();
   setTimeout(playVictory, 650);
+  if (iWon) setTimeout(fxConfetti, 700);
 
   const timeoutLabel = game.mode === 'speed'
     ? 'nestihl(a) odpovědět včas.'

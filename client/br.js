@@ -272,12 +272,62 @@ function brRender(force) {
     if (wordInput && document.activeElement !== wordInput) wordInput.focus();
   }
   br.lastKey = key;
+  brSyncNewPattern();
+  brTimers();
+}
+
+// Velké okno s novým zadáním (po ztrátě života) / začátkem zápasu — s odpočtem.
+function brReasonText(ev, st) {
+  if (!ev || ev.type !== 'timeout') return '';
+  const n = esc(st.players[ev.seat].name);
+  if (ev.eliminated) return `💀 ${n} vypadl(a)!`;
+  if (ev.saved) return `${BR_HEART} Bonusové srdce zachránilo hráče ${n}`;
+  return `💥 ${n} nestihl(a) odpovědět — ztrácí ${BR_HEART}`;
+}
+
+function brSyncNewPattern() {
+  if (!br || brScreen !== 'game') return;
+  const st = br.st;
+  let o = document.getElementById('brNew');
+  const active = st.phase === 'break' || st.phase === 'reveal';
+  if (!active) {
+    if (o && !o.classList.contains('out')) { o.classList.add('out'); setTimeout(() => o.remove(), 230); }
+    br.newKey = null;
+    return;
+  }
+  const key = st.phase + ':' + st.pattern.type + st.pattern.value;
+  const next = st.players[st.nextTurn];
+  const nextHtml = next ? `${st.phase === 'reveal' ? 'Začíná' : 'Pokračuje'}: <b>${esc(next.name)}</b>` : '';
+  if (o && br.newKey === key) return; // už zobrazeno
+  br.newKey = key;
+  if (o) o.remove();
+  o = document.createElement('div');
+  o.id = 'brNew';
+  o.className = 'brn';
+  o.innerHTML = `
+    <div class="brn-box">
+      <div class="brn-label">${st.phase === 'reveal' ? 'Začíná zápas' : 'Nové zadání'}</div>
+      <div class="brn-reason">${st.phase === 'break' ? (br.breakReason || '') : 'Poslední přeživší vyhrává'}</div>
+      <div class="brn-tiles">${patternTilesHtml(st.pattern, 'reveal')}</div>
+      <div class="brn-instr">${esc(patternInstruction(st.pattern))}</div>
+      <div class="brn-count" id="brnCount"></div>
+      <div class="brn-next">${nextHtml}</div>
+    </div>`;
+  document.body.appendChild(o);
+  br.brnSec = null;
+  fxFlash(brColor(st.nextTurn).rgb);
+  playSwoosh();
   brTimers();
 }
 
 function brTimers() {
   if (!br || brScreen !== 'game') return;
   const st = br.st;
+  const cn = document.getElementById('brnCount');
+  if (cn && st.phase !== 'turn') {
+    const s2 = Math.max(1, Math.ceil(st.breakLeft / 1000));
+    if (br.brnSec !== s2) { br.brnSec = s2; cn.textContent = String(s2); cn.classList.remove('pulse'); void cn.offsetWidth; cn.classList.add('pulse'); }
+  }
   const t = document.getElementById('brTimer');
   const bar = document.getElementById('brBar');
   if (!t) return;
@@ -320,6 +370,8 @@ function brHandleEvent(ev, prevPlayers) {
     if (ev.heart) { brSeatFlash(ev.seat, 'heal'); brBanner(`${BR_HEART} ${brName(ev.seat)} získal(a) bonusové srdce!`, 'br-gold'); }
   } else if (ev.type === 'timeout') {
     brSeatFlash(ev.seat, 'hit');
+    fxHeartBurst(document.getElementById('brSeat' + ev.seat), ev.eliminated);
+    if (ev.seat === me) fxFlash('255,59,48');
     playPenalty();
     if (ev.seat === me) { vibrate([60, 40, 120]); const c = document.querySelector('.card'); if (c) { c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); } }
     if (ev.eliminated) brBanner(`💀 ${brName(ev.seat)} vypadl(a)!`, 'p1');
@@ -337,6 +389,8 @@ function brHandleEvent(ev, prevPlayers) {
 function closeBrOverlay() {
   const o = document.getElementById('brOverlay');
   if (o) o.remove();
+  const n = document.getElementById('brNew');
+  if (n) n.remove();
 }
 
 function showBrEliminated(place) {
@@ -362,7 +416,7 @@ function renderBrResult(d) {
   closeBrOverlay();
   const meSeat = br.youAre;
   const iWon = d.winnerSeat === meSeat;
-  if (iWon) playVictory(); else { playDefeat(); }
+  if (iWon) { playVictory(); setTimeout(fxConfetti, 250); } else { playDefeat(); }
   const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
   const names = {};
   br.players.forEach(p => { names[p.seat] = p.name; });
@@ -427,6 +481,7 @@ socket.on('br_state', (st) => {
   if (!br || br.over || st.roomId !== br.roomId) return;
   const prev = br.st;
   const ev = st.event;
+  if (ev && ev.type === 'timeout') br.breakReason = brReasonText(ev, st);
   br.st = st;
   if (brScreen !== 'game') return;
   brRender();
@@ -471,6 +526,7 @@ socket.on('br_eliminated', ({ place }) => {
 socket.on('br_over', (d) => {
   if (!br || d.roomId !== br.roomId) return;
   br.over = true;
+  closeBrOverlay();
   hideReconnectOverlay();
   setTimeout(() => { if (br && br.over) renderBrResult(d); }, 1400);
   const ev = d.event;
@@ -501,6 +557,7 @@ socket.on('br_rejoin_failed', () => {
 setInterval(() => {
   if (brScreen !== 'game' && document.body.classList.contains('br-live')) {
     document.body.classList.remove('br-live', 'vk-themed');
+    const bn = document.getElementById('brNew'); if (bn) bn.remove();
     ['--vk-main', '--vk-fg', '--vk-bg', '--vk-rgb', '--vk-on', '--br-rgb'].forEach(k => document.body.style.removeProperty(k));
   }
 }, 400);
