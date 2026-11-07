@@ -531,8 +531,16 @@ function statsCardHtml() {
           <div><b id="stGames">${games}</b><span>her</span></div>
           <div><b id="stWin">${pct}</b><span>výhry</span></div>
           <div><b>🔥 ${currentStreak() || 0}</b><span>série</span></div>
+          <div><b id="stBr">${st ? st.brWins : '–'}</b><span>👑 Royale</span></div>
         </div>
       </div>`;
+}
+function onlineText(n) { return `${n} ${n === 1 ? 'hráč' : (n < 5 ? 'hráči' : 'hráčů')} online`; }
+function loadOnline() {
+  socket.emit('get_online', (n) => {
+    const el = document.getElementById('onlineLine');
+    if (el && typeof n === 'number') el.innerHTML = `<i class="dot"></i>${onlineText(n)}`;
+  });
 }
 function loadMyStats() {
   const n = loadNickname();
@@ -543,6 +551,7 @@ function loadMyStats() {
     const g = document.getElementById('stGames'), w = document.getElementById('stWin');
     if (g) g.textContent = st.games;
     if (w) w.textContent = st.games ? Math.round(st.wins / st.games * 100) + ' %' : '–';
+    const r = document.getElementById('stBr'); if (r) r.textContent = st.brWins;
   });
 }
 
@@ -589,6 +598,7 @@ function renderMenu(notice) {
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       ${nickChipHtml()}
       <div class="logo-wrap"><img class="logo" src="logo.png" alt="Dopišto" /></div>
+      <div class="online-line" id="onlineLine"></div>
       <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
 
       <div class="error" id="err">${notice || ''}</div>
@@ -629,6 +639,7 @@ function renderMenu(notice) {
   document.getElementById('tabBoard').onclick = () => renderLeaderboard(selectedMode === 'br' ? 2 : selectedMode);
   document.getElementById('tabSettings').onclick = () => showInfoSheet('Nastavení', `<div id="settingsBody">${settingsHtml()}</div>`, bindSettingsInputs);
   loadMyStats();
+  loadOnline();
   document.getElementById('playBtn').onclick = () => {
     if (!requireNick()) return;
     ensureAudioCtx();
@@ -638,7 +649,7 @@ function renderMenu(notice) {
   // Karta denní výzvy: dnešní zadání, bonus dne a odpočet do půlnoci (UTC).
   const tick = () => { const t = document.getElementById('dcTimer'); if (t) t.textContent = 'zbývá ' + fmtCountdown(msUntilUtcMidnight()); };
   tick();
-  menuTimer = setInterval(tick, 30000);
+  menuTimer = setInterval(() => { tick(); loadOnline(); }, 30000);
   socket.emit('get_daily_info', (info) => {
     const pat = document.getElementById('dcPattern');
     const bon = document.getElementById('dcBonus');
@@ -2559,3 +2570,9 @@ document.addEventListener('click', (e) => {
 }, true);
 
 
+
+
+// Service worker (rychlé opakované načtení, menu funguje i offline)
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+}

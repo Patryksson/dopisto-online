@@ -197,6 +197,7 @@ function endGame(io, room, event) {
   const ranking = room.players
     .map((p, i) => ({ seat: i, name: p.nickname, place: p.place || 99, words: p.words }))
     .sort((a, b) => a.place - b.place);
+  try { require('./store').recordBr(room.players.map(p => p.nickname), winner ? winner.nickname : null); } catch (e) { console.error('recordBr:', e); }
   io.to(room.id).emit('br_over', {
     roomId: room.id,
     winnerSeat: winner ? room.players.indexOf(winner) : null,

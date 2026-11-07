@@ -283,6 +283,7 @@ function setupGame(io, socket) {
   // ==== Denní výzva — sólo, bez soupeře, jednou denně stejné zadání pro
   // úplně všechny (viz dailyPattern v dictionary.js). ====
   socket.on('get_daily_leaderboard', (cb) => { if (typeof cb === 'function') cb(store.dailyLeaderboard(20)); });
+  socket.on('get_online', (cb) => { if (typeof cb === 'function') cb(io.engine.clientsCount); });
   socket.on('get_my_stats', (payload, cb) => {
     if (typeof cb !== 'function' || !payload || typeof payload !== 'object') return;
     const nick = sanitizeNickname(payload.nickname);

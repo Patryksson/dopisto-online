@@ -17,6 +17,8 @@ app.use(securityHeaders);
 // app.js/index.html (menší přenos = méně dat, méně baterie na rádiu).
 app.use(compression());
 
+require('./assets').mount(app);
+
 app.use(express.static(path.join(__dirname, '..', 'client'), {
   etag: true,
   lastModified: true,

@@ -122,16 +122,29 @@ function addReport(r) {
   fs.writeFileSync(REPORTS_FILE, JSON.stringify(list.slice(-500), null, 1));
 }
 
+// Battle Royale: jen počty her a výher (bez ELO).
+function recordBr(names, winnerName) {
+  const m = db.br || (db.br = {});
+  names.forEach(n => {
+    const k = key(n);
+    const p = m[k] || (m[k] = { name: n, games: 0, wins: 0 });
+    p.games += 1;
+    if (winnerName && key(winnerName) === k) p.wins += 1;
+  });
+  save();
+}
+
 // Souhrn her hráče napříč módy (výhry/prohry z ELO profilů; Royale se do ELO nezapisuje).
 function playerStats(nickname) {
   const k = key(nickname || '');
   let wins = 0, losses = 0;
   Object.keys(db).forEach(m => {
-    if (m === 'daily') return;
+    if (m === 'daily' || m === 'br') return;
     const p = db[m] && db[m][k];
     if (p) { wins += p.wins || 0; losses += p.losses || 0; }
   });
-  return { games: wins + losses, wins, losses };
+  const br = (db.br && db.br[k]) || { games: 0, wins: 0 };
+  return { games: wins + losses + br.games, wins: wins + br.wins, losses: losses + (br.games - br.wins), brWins: br.wins, brGames: br.games };
 }
 
-module.exports = { playerStats, addReport, getProfile, recordResult, leaderboard, recordDaily, dailyLeaderboard, dailyStats };
+module.exports = { recordBr, playerStats, addReport, getProfile, recordResult, leaderboard, recordDaily, dailyLeaderboard, dailyStats };

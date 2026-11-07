@@ -1,9 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-// Řazené pole + binární hledání místo Set — výrazně méně paměti (cca 370 MB
-// místo 500+ MB) pro necelé 4 miliony tvarů slov, bez znatelného dopadu na
-// rychlost (hledání je O(log n), volá se jen jednou na odeslané slovo).
+// Řazené pole + binární hledání místo Set — méně paměti, hledání je O(log n)
+// a volá se jen jednou na odeslané slovo (načtení slovníku trvá ~0,1 s).
 const WORDS = fs.readFileSync(path.join(__dirname, 'data', 'words.txt'), 'utf8')
   .split('\n')
   .map(w => w.trim())
