@@ -90,23 +90,44 @@ function generateCode() {
 }
 
 // ==== ELO matchmaking fronta ====
+// Připouštěný rozdíl ELO roste s dobou čekání; po 20 s se páruje kdokoli,
+// ať nikdo nečeká zbytečně dlouho, když je hráčů málo.
+const MM_OPEN_MS = 20000;
+const MM_AVOID_REPEAT_MS = 25000;
+const recentOpponent = new Map(); // přezdívka -> { opp, at }
+function mmTolerance(waitedMs) {
+  return waitedMs >= MM_OPEN_MS ? Infinity : 100 + 45 * (waitedMs / 1000);
+}
+function wasRecentPair(a, b, now, waited) {
+  if (waited >= MM_AVOID_REPEAT_MS) return false;
+  const r = recentOpponent.get(a.nickname);
+  return !!(r && r.opp === b.nickname && now - r.at < 3 * 60 * 1000);
+}
+
 function tryMatchQueue(io, mode) {
   const q = waitingQueue[mode];
   const now = Date.now();
+  let best = null;
   for (let i = 0; i < q.length; i++) {
     for (let j = i + 1; j < q.length; j++) {
       const a = q[i], b = q[j];
+      if (a.nickname === b.nickname) continue; // dvě stejné přezdívky spolu hrát nemají
       const waited = now - Math.min(a.joinedAt, b.joinedAt);
-      const tolerance = Math.min(1000, 100 + 15 * (waited / 1000));
-      if (Math.abs(a.elo - b.elo) <= tolerance) {
-        q.splice(j, 1);
-        q.splice(i, 1);
-        startMatch(io, a, b, mode);
-        return true;
-      }
+      const diff = Math.abs(a.elo - b.elo);
+      if (diff > mmTolerance(waited)) continue;
+      if (wasRecentPair(a, b, now, waited)) continue;
+      // nejdéle čekající hráči mají přednost, pak nejbližší ELO
+      const score = diff - waited / 50;
+      if (!best || score < best.score) best = { i, j, a, b, score };
     }
   }
-  return false;
+  if (!best) return false;
+  q.splice(best.j, 1);
+  q.splice(best.i, 1);
+  recentOpponent.set(best.a.nickname, { opp: best.b.nickname, at: now });
+  recentOpponent.set(best.b.nickname, { opp: best.a.nickname, at: now });
+  startMatch(io, best.a, best.b, mode);
+  return true;
 }
 
 function startMatchmakingLoop(io) {

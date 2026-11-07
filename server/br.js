@@ -26,6 +26,7 @@ const MIN_TURN_MS = 5000;         // pod tuto hranici se nejde (jinak by to neš
 
 const REVEAL_MS = 3500;           // odpočet před úplným začátkem (stejně jako u ostatních režimů)
 const BREAK_MS = 5000;            // odpočet po změně zadání
+const DC_TURN_MS = 4000;          // tah odpojeného hráče se zkrátí na tolik ms
 const DISCONNECT_GRACE_MS = 20000;// po tolika ms bez spojení hráč vypadává
 
 // Tresty jako v ostatních režimech — tady se ale odečítají z času na aktuální tah.
@@ -42,8 +43,9 @@ const queue = [];                 // veřejná fronta { socket, nickname, joined
 const lobbies = new Map();        // code -> { code, host, members:[{socket,nickname}], timeout }
 const rooms = new Map();          // roomId -> room
 
-function roundTimeMs(round) {
-  return Math.max(MIN_TURN_MS, BASE_TURN_MS - (round - 1) * ROUND_STEP_MS);
+const TURN_CHOICES_S = [10, 15, 20, 30];
+function roundTimeMs(round, base) {
+  return Math.max(MIN_TURN_MS, (base || BASE_TURN_MS) - (round - 1) * ROUND_STEP_MS);
 }
 
 function pickPattern(prevValue) {
@@ -100,6 +102,7 @@ function publicState(room) {
     players: room.players.map((p, i) => ({
       seat: i, name: p.nickname, lives: p.lives, alive: p.alive, meter: p.meter,
       color: p.color, pass: p.pass, reverse: p.reverse, connected: p.connected && !p.left, left: p.left, place: p.place,
+      dcLeft: p.alive && !p.connected && !p.left ? Math.max(0, DISCONNECT_GRACE_MS - (now - p.disconnectedAt)) : 0,
     })),
   };
 }
@@ -111,9 +114,10 @@ function emitState(io, room, event) {
 // ---- průběh hry ----
 function startTurn(io, room, idx) {
   room.turn = idx;
-  room.turnMs = roundTimeMs(room.round);
+  room.turnMs = roundTimeMs(room.round, room.baseTurnMs);
   room.turnEndsAt = Date.now() + room.turnMs;
   room.phase = 'turn';
+  room.dcShort = false;
 }
 
 // Jeden "krok" (slovo / pass / změna směru / vypršení). Po tolika krocích, kolik
@@ -187,6 +191,45 @@ function forfeit(io, room, idx) {
   emitState(io, room, { type: 'left', seat: idx });
 }
 
+// ---- odveta se stejnou skupinou ----
+const RM_WAIT_MS = 20000;
+function rmPresent(room, i) {
+  const p = room.players[i];
+  return !!(p && p.socket && p.socket.connected && !p.left && !room.rm.gone.has(i));
+}
+function rmEmit(room) {
+  const rm = room.rm;
+  const total = room.players.filter((_, i) => rmPresent(room, i)).length;
+  const names = [...rm.ready].filter(i => rmPresent(room, i)).map(i => room.players[i].baseNick || room.players[i].nickname);
+  room.players.forEach((p, i) => {
+    if (rmPresent(room, i)) p.socket.emit('br_rematch_state', { roomId: room.id, ready: names, total, mine: rm.ready.has(i), ttlMs: rm.until ? Math.max(0, rm.until - Date.now()) : RM_WAIT_MS });
+  });
+}
+function rmStart(io, room) {
+  const rm = room.rm;
+  clearTimeout(rm.timer); rm.timer = null;
+  const ids = [...rm.ready].filter(i => rmPresent(room, i));
+  if (ids.length < 2) { rmExpire(room); return; }
+  room.rmStarted = true;
+  startRoom(io, ids.map(i => ({ socket: room.players[i].socket, nickname: room.players[i].baseNick || room.players[i].nickname })), { turnSec: room.baseTurnMs / 1000 });
+}
+function rmExpire(room) {
+  const rm = room.rm;
+  clearTimeout(rm.timer); rm.timer = null; rm.until = 0;
+  room.players.forEach((p, i) => { if (rm.ready.has(i) && rmPresent(room, i)) p.socket.emit('br_rematch_expired', { roomId: room.id }); });
+  rm.ready.clear();
+}
+function rmEvaluate(io, room) {
+  if (!room.rm || room.rmStarted) return;
+  const rm = room.rm;
+  const present = room.players.filter((_, i) => rmPresent(room, i)).length;
+  const ready = [...rm.ready].filter(i => rmPresent(room, i)).length;
+  if (ready >= 2 && ready >= present) { rmStart(io, room); return; }
+  if (ready === 0) { clearTimeout(rm.timer); rm.timer = null; rm.until = 0; }
+  else if (ready === 1 && present <= 1) { rmExpire(room); return; }
+  rmEmit(room);
+}
+
 function endGame(io, room, event) {
   if (room.finished) return;
   room.finished = true;
@@ -232,6 +275,12 @@ function tickRoom(io, room) {
   } else room.emptySince = null;
 
   if (room.phase === 'turn') {
+    // Odpojený hráč na tahu nezdržuje ostatní: zbývá mu jen pár vteřin.
+    const cp = room.players[room.turn];
+    if (cp && cp.alive && !cp.connected && !cp.left && !room.dcShort && room.turnEndsAt - now > DC_TURN_MS) {
+      room.dcShort = true;
+      room.turnEndsAt = now + DC_TURN_MS;
+    }
     if (now >= room.turnEndsAt) { handleTimeout(io, room); return; }
     io.to(room.id).emit('br_tick', { phase: 'turn', turn: room.turn, turnLeft: Math.max(0, room.turnEndsAt - now), turnMs: room.turnMs });
   } else if (room.phase === 'break' || room.phase === 'reveal') {
@@ -244,7 +293,8 @@ function tickRoom(io, room) {
   }
 }
 
-function startRoom(io, entries) {
+function startRoom(io, entries, opts) {
+  const baseTurnMs = opts && TURN_CHOICES_S.includes(opts.turnSec) ? opts.turnSec * 1000 : BASE_TURN_MS;
   const id = 'br_' + Math.random().toString(36).slice(2, 10);
   const shuffled = entries.slice();
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -264,7 +314,7 @@ function startRoom(io, entries) {
     const n = (seen.get(k) || 0) + 1;
     seen.set(k, n);
     return {
-      socket: e.socket, nickname: n > 1 ? `${base} (${n})` : base,
+      socket: e.socket, nickname: n > 1 ? `${base} (${n})` : base, baseNick: base,
       token: crypto.randomBytes(8).toString('hex'),
       color: colors[idx], lives: START_LIVES, alive: true, connected: true, left: false, disconnectedAt: 0,
       meter: 0, pass: true, reverse: true, words: 0, place: null,
@@ -274,7 +324,7 @@ function startRoom(io, entries) {
   const room = {
     id, players, dir: 1, round: 1, steps: 0, turn: 0, nextTurn: Math.floor(Math.random() * players.length),
     pattern: pickPattern(null), usedWords: new Set(), history: [],
-    phase: 'reveal', breakEndsAt: Date.now() + REVEAL_MS, turnEndsAt: 0, turnMs: roundTimeMs(1),
+    phase: 'reveal', breakEndsAt: Date.now() + REVEAL_MS, turnEndsAt: 0, turnMs: roundTimeMs(1, baseTurnMs), baseTurnMs,
     dailyBonus: dailyBonusForDate(), finished: false, intervalId: null, emptySince: null,
   };
   rooms.set(id, room);
@@ -310,7 +360,7 @@ function tryStartQueue(io, force) {
 }
 
 function lobbyPayload(l, forSocket) {
-  return { code: l.code, players: l.members.map(m => m.nickname), isHost: l.host.id === forSocket.id, max: BR_MAX, min: BR_MIN_LOBBY_START };
+  return { code: l.code, players: l.members.map(m => m.nickname), isHost: l.host.id === forSocket.id, turnSec: l.turnSec, max: BR_MAX, min: BR_MIN_LOBBY_START };
 }
 function emitLobby(l) {
   for (const m of l.members) m.socket.emit('br_lobby', lobbyPayload(l, m.socket));
@@ -371,12 +421,13 @@ function setupBR(io, socket) {
 
   socket.on('br_cancel', () => { removeFromQueue(socket); emitQueue(); });
 
-  socket.on('br_create_lobby', ({ nickname }) => {
-    const n = nick(nickname); if (!n) return;
+  socket.on('br_create_lobby', (payload) => {
+    const n = nick(payload.nickname); if (!n) return;
     socket.data.nickname = n;
     clearBrState();
     const code = genCode();
-    const l = { code, host: socket, members: [{ socket, nickname: n }], timeout: null };
+    const turnSec = TURN_CHOICES_S.includes(Number(payload && payload.turnSec)) ? Number(payload.turnSec) : 15;
+    const l = { code, host: socket, members: [{ socket, nickname: n }], timeout: null, turnSec };
     l.timeout = setTimeout(() => {
       if (!lobbies.has(code)) return;
       lobbies.delete(code);
@@ -406,7 +457,7 @@ function setupBR(io, socket) {
     clearTimeout(l.timeout);
     lobbies.delete(l.code);
     for (const m of l.members) m.socket.data.brLobby = null;
-    startRoom(io, l.members.map(m => ({ socket: m.socket, nickname: m.nickname })));
+    startRoom(io, l.members.map(m => ({ socket: m.socket, nickname: m.nickname })), { turnSec: l.turnSec });
   }
 
   socket.on('br_start_lobby', () => {
@@ -414,6 +465,36 @@ function setupBR(io, socket) {
     if (!l || l.host.id !== socket.id) return;
     if (l.members.length < BR_MIN_LOBBY_START) { socket.emit('br_error', { message: `Na spuštění potřebuješ aspoň ${BR_MIN_LOBBY_START} hráče.` }); return; }
     startLobby(l);
+  });
+
+
+  socket.on('br_rematch', ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room || !room.finished || room.rmStarted) { socket.emit('br_rematch_expired', { roomId }); return; }
+    const idx = room.players.findIndex(p => p.socket && p.socket.id === socket.id);
+    if (idx === -1) return;
+    if (socket.data.brRoom) return;
+    room.rm = room.rm || { ready: new Set(), gone: new Set(), timer: null, until: 0 };
+    const rm = room.rm;
+    clearBrState();
+    socket.data.nickname = room.players[idx].baseNick || room.players[idx].nickname;
+    rm.gone.delete(idx);
+    rm.ready.add(idx);
+    if (!rm.timer) {
+      rm.until = Date.now() + RM_WAIT_MS;
+      rm.timer = setTimeout(() => { if (!room.rmStarted) rmStart(io, room); }, RM_WAIT_MS);
+    }
+    rmEvaluate(io, room);
+  });
+
+  socket.on('br_rematch_cancel', ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room || !room.rm || room.rmStarted) return;
+    const idx = room.players.findIndex(p => p.socket && p.socket.id === socket.id);
+    if (idx === -1) return;
+    room.rm.gone.add(idx);
+    room.rm.ready.delete(idx);
+    rmEvaluate(io, room);
   });
 
   socket.on('br_leave_lobby', () => leaveLobby(socket, true));
@@ -518,7 +599,7 @@ function setupBR(io, socket) {
     emitQueue();
     leaveLobby(socket, true);
     for (const room of rooms.values()) {
-      if (room.finished) continue;
+      if (room.finished) { if (room.rm && !room.rmStarted) setTimeout(() => rmEvaluate(io, room), 50); continue; }
       const idx = room.players.findIndex(p => p.socket && p.socket.id === socket.id && !p.left);
       if (idx === -1) continue;
       const p = room.players[idx];

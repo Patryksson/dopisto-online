@@ -686,6 +686,10 @@ function bindRulesPanels() {
 }
 
 // Druhá úroveň: výběr režimu, hledání soupeře, lobby.
+const BR_TURN_CHOICES = [10, 15, 20, 30];
+let brTurnSec = 15;
+try { const v = Number(localStorage.getItem('dopisto_br_turn')); if (BR_TURN_CHOICES.includes(v)) brTurnSec = v; } catch {}
+
 function renderPlayMenu(notice) {
   clearInterval(menuTimer);
   app.innerHTML = `
@@ -712,10 +716,19 @@ function renderPlayMenu(notice) {
       <div class="menu-list">
         <button class="menu-item" id="createLobbyBtn"><span class="ic">＋</span><span>Vytvořit lobby</span></button>
       </div>
+      <div class="opt-stack">
       <div class="custom-pat" id="customPatRow">
         <label for="customPat">Vlastní zadání <small>(nepovinné)</small></label>
         <input id="customPat" maxlength="2" placeholder="např. úč" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" />
         <div class="custom-pat-hint" id="customPatHint">Dvě písmena, na která budete hrát. Prázdné pole = náhodné zadání.</div>
+      </div>
+      <div class="custom-pat br-time" id="brTimeRow">
+        <label>Čas na odpověď <small>(v prvním kole)</small></label>
+        <div class="time-chips" id="brTimeChips" role="radiogroup" aria-label="Čas na odpověď">
+          ${BR_TURN_CHOICES.map(s => `<button type="button" class="time-chip${s === brTurnSec ? ' on' : ''}" data-s="${s}" role="radio" aria-checked="${s === brTurnSec}">${s} s${s === 15 ? '<i>výchozí</i>' : ''}</button>`).join('')}
+        </div>
+        <div class="custom-pat-hint">Každé kolo se čas zkracuje o 1 s (minimum 5 s). Platí pro hru s kamarády.</div>
+      </div>
       </div>
       <div class="lobby-row">
         <div class="code-boxes" id="joinCodeBoxes">
@@ -737,11 +750,19 @@ function renderPlayMenu(notice) {
     if (!row || !inp) return;
     const one = selectedMode === 'speed';
     row.style.visibility = selectedMode === 'br' ? 'hidden' : 'visible';
+    const tr = document.getElementById('brTimeRow');
+    if (tr) tr.style.visibility = selectedMode === 'br' ? 'visible' : 'hidden';
     inp.maxLength = one ? 1 : 2;
     inp.placeholder = one ? 'např. p' : (selectedMode === 'middle' ? 'např. ou' : 'např. úč');
     if ([...inp.value].length > inp.maxLength) inp.value = '';
     hint.textContent = (one ? 'Jedno písmeno, na které budete hrát.' : 'Dvě písmena, na která budete hrát.') + ' Prázdné pole = náhodné zadání.';
   };
+  document.querySelectorAll('#brTimeChips .time-chip').forEach(btn => btn.onclick = () => {
+    brTurnSec = Number(btn.dataset.s);
+    try { localStorage.setItem('dopisto_br_turn', String(brTurnSec)); } catch {}
+    document.querySelectorAll('#brTimeChips .time-chip').forEach(b => { const on = b === btn; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+    vibrate(8);
+  });
   bindModeSegmented(() => selectedMode, (newMode) => { selectedMode = newMode; updateCustomPat(); });
   updateCustomPat();
 
@@ -756,7 +777,7 @@ function renderPlayMenu(notice) {
   document.getElementById('createLobbyBtn').onclick = () => {
     const n = requireNick(); if (!n) return;
     ensureAudioCtx();
-    if (selectedMode === 'br') { brScreen = 'joining'; socket.emit('br_create_lobby', { nickname: n }); renderBrWait('Vytvářím lobby…'); return; }
+    if (selectedMode === 'br') { brScreen = 'joining'; socket.emit('br_create_lobby', { nickname: n, turnSec: brTurnSec }); renderBrWait('Vytvářím lobby…'); return; }
     let pattern = '';
     if (selectedMode === 2 || selectedMode === 'middle' || selectedMode === 'speed') {
       pattern = (document.getElementById('customPat').value || '').trim().toLowerCase();
@@ -1705,34 +1726,54 @@ function mountVK(input) {
   window.addEventListener('orientationchange', () => setTimeout(applyKeySize, 200), sig);
 
   function accMap(kind) { return kind === 'hacek' ? VK_HACEK : kind === 'krouzek' ? VK_KROUZEK : VK_CARKA; }
-  function updateAcc() {
-    const last = vkInput.value.slice(-1);
-    vkEl.querySelectorAll('.vk-acc').forEach(b => b.classList.toggle('dim', !accMap(b.dataset.k)[last]));
+  // Kurzor: dá se klepnout doprostřed slova a opravit jedno písmeno (jako u běžné klávesnice).
+  function selRange() {
+    const n = vkInput.value.length;
+    const s = typeof vkInput.selectionStart === 'number' ? vkInput.selectionStart : n;
+    const e = typeof vkInput.selectionEnd === 'number' ? vkInput.selectionEnd : s;
+    return [s, e];
   }
-  function changed() {
+  function setCaret(p) { try { vkInput.setSelectionRange(p, p); } catch { /* ignore */ } }
+  function updateAcc() {
+    const [s, e] = selRange();
+    const prev = s === e && s > 0 ? vkInput.value[s - 1] : '';
+    vkEl.querySelectorAll('.vk-acc').forEach(b => b.classList.toggle('dim', !prev || !accMap(b.dataset.k)[prev]));
+  }
+  function changed(caret) {
+    setCaret(caret);
     vkInput.dispatchEvent(new Event('input', { bubbles: true }));
-    vkInput.scrollLeft = vkInput.scrollWidth;
+    setCaret(caret);
+    if (caret >= vkInput.value.length) vkInput.scrollLeft = vkInput.scrollWidth;
     updateAcc();
   }
   function applyAccent(kind) {
+    const [s, e] = selRange();
+    if (s !== e || s < 1) return;
     const v = vkInput.value;
-    const to = accMap(kind)[v.slice(-1)];
+    const to = accMap(kind)[v[s - 1]];
     if (!to) return;
-    vkInput.value = v.slice(0, -1) + to;
-    changed();
+    vkInput.value = v.slice(0, s - 1) + to + v.slice(s);
+    changed(s);
   }
   function insert(ch) {
-    if (vkInput.value.length >= 40) return;
-    vkInput.value += ch;
-    changed();
+    const [s, e] = selRange();
+    const v = vkInput.value;
+    if (v.length - (e - s) >= 40) return;
+    vkInput.value = v.slice(0, s) + ch + v.slice(e);
+    changed(s + ch.length);
   }
   function back() {
-    if (!vkInput.value) return;
-    vkInput.value = vkInput.value.slice(0, -1);
-    changed();
+    const [s, e] = selRange();
+    const v = vkInput.value;
+    if (s !== e) { vkInput.value = v.slice(0, s) + v.slice(e); changed(s); return; }
+    if (s < 1) return;
+    vkInput.value = v.slice(0, s - 1) + v.slice(s);
+    changed(s - 1);
   }
   updateAcc();
   vkInput.addEventListener('input', updateAcc, sig);
+  ['click', 'keyup', 'select', 'touchend'].forEach(t => vkInput.addEventListener(t, () => setTimeout(updateAcc, 0), sig));
+  document.addEventListener('selectionchange', () => { if (document.activeElement === vkInput) updateAcc(); }, sig);
 
   const isLetterKey = (k) => k !== 'back' && k !== 'send' && k !== 'hacek' && k !== 'carka' && k !== 'krouzek';
 
@@ -2246,7 +2287,7 @@ function rematchSet(state) {
   renderRematchBox();
 }
 socket.on('rematch_pending', ({ ttlMs }) => rematchSet({ phase: 'pending', until: Date.now() + ttlMs }));
-socket.on('rematch_offered', ({ from, ttlMs }) => { playGo(); rematchSet({ phase: 'offered', from, until: Date.now() + ttlMs }); });
+socket.on('rematch_offered', ({ from, ttlMs }) => { playGo(); vibrate([25, 40, 25]); rematchSet({ phase: 'offered', from, until: Date.now() + ttlMs }); });
 socket.on('rematch_expired', () => rematchSet({ phase: 'notice', msg: 'Návrh na odvetu vypršel.' }));
 socket.on('rematch_declined', () => rematchSet({ phase: 'notice', msg: 'Soupeř odvetu odmítl(a).' }));
 socket.on('rematch_unavailable', ({ reason }) => rematchSet({ phase: 'unavailable', msg: reason }));
@@ -2517,6 +2558,7 @@ socket.on('rejoin_failed', () => {
 
 // Soupeř (ne my) ztratil spojení.
 socket.on('opponent_disconnected', ({ graceMs }) => {
+  vibrate([30, 50, 30]);
   showOpponentDisconnectedBanner(graceMs);
 });
 socket.on('opponent_reconnected', () => {

@@ -646,12 +646,13 @@ body.vk-themed .vk-alt.hot{background:var(--vk-main);color:var(--vk-on)}
 body.has-vk .br-card{padding-top:10px;padding-bottom:8px}
 body.has-vk .br-card .daily-bonus-chip,
 body.has-vk .br-card .used-count,
-body.has-vk .br-card .game-footer,
 body.has-vk .br-card .feed,
 body.has-vk .br-card .br-pw small{display:none}
 body.has-vk .br-head{margin-bottom:0}
-body.has-vk .br-ring{height:clamp(150px,calc(100vh - var(--vk-h,250px) - 235px),330px);margin:2px 0}
-@supports (height:100dvh){body.has-vk .br-ring{height:clamp(150px,calc(100dvh - var(--vk-h,250px) - 235px),330px)}}
+body.has-vk .br-card .game-footer{margin-top:2px}
+body.has-vk .br-card .game-footer button{padding:5px 12px;font-size:11px}
+body.has-vk .br-ring{height:clamp(150px,calc(100vh - var(--vk-h,250px) - 270px),330px);margin:2px 0}
+@supports (height:100dvh){body.has-vk .br-ring{height:clamp(150px,calc(100dvh - var(--vk-h,250px) - 270px),330px)}}
 body.has-vk .br-seat{padding:3px 3px 3px;border-radius: var(--r-md)}
 body.has-vk .br-name{font-size:10px}
 body.has-vk .br-hearts{font-size:12px;margin-top:0}
@@ -1005,3 +1006,22 @@ body.has-vk .br-spectate{margin:0 0 4px}
   .brn-next b { color: rgb(var(--br-rgb)); }
   @media (max-width: 600px) and (max-height: 720px) { .page.home .logo-wrap { min-height: 40px; } }
   @media (max-width: 600px) and (max-height: 660px) { .page.home .logo-wrap { min-height: 30px; } }
+
+/* Opustit hru – malé tlačítko v hlavičce Royale, daleko od schopností */
+.br-head{gap:8px;white-space:nowrap}
+.br-head .br-leave{flex:0 0 auto;width:auto;display:inline-flex;margin:0 auto;background:none;border:1px dashed rgba(255,255,255,.22);color:var(--muted);font-size:10px;letter-spacing:.08em;padding:3px 9px;border-radius:999px;text-transform:uppercase;min-height:0}
+.br-head .br-leave:hover{color:#fff;border-color:rgba(255,59,48,.7);background:none}
+.br-head .br-round,.br-head .br-dir{flex:0 0 auto}
+.br-head{padding-right:48px;letter-spacing:.06em;gap:6px}
+
+/* Royale: výběr času na odpověď – stejné místo jako „Vlastní zadání" u ostatních režimů */
+.opt-stack{display:grid}
+.opt-stack>.custom-pat{grid-area:1/1}
+.time-chips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px}
+.time-chip{width:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:10px 4px;font-size:14px;letter-spacing:.04em;text-transform:none;border-radius:var(--r-md);background:rgba(8,8,13,.86);border:1px dashed rgba(255,255,255,.22);color:var(--ink-soft)}
+.time-chip i{font-style:normal;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.time-chip.on{border:1px solid var(--dash);color:#fff;background:rgba(255,59,48,.16);box-shadow:0 0 12px rgba(255,59,48,.25)}
+.time-chip.on i{color:rgba(255,255,255,.75)}
+.lobby-time{font-size:12px;color:var(--muted);letter-spacing:.06em;margin:2px 0 6px}
+.lobby-time b{color:var(--ink)}
+.time-chip{padding:7px 4px}.time-chips{margin-top:4px}

@@ -11,7 +11,13 @@ const BLOCKED_STEMS = [
   'jebat', 'jebn', 'jebe', 'jebu', 'zasran', 'posran', 'srac', 'buzer', 'buzna', 'cikan', 'zidak',
   'negr', 'nigg', 'nigr', 'fuck', 'shit', 'bitch', 'cunt', 'dick', 'whore', 'slut', 'rape', 'nazi',
   'hitler', 'mrdat', 'mrdka', 'prdel', 'zmrd', 'lamka', 'mocal',
+  'kunda', 'kundo', 'chcanky', 'chcat', 'hajzl', 'mrdej', 'pojeb', 'vyjeb', 'rozjeb', 'zkurv', 'pizda', 'pyco',
+  'faggot', 'fagot', 'retard', 'nigga', 'cumshot', 'porn', 'sperma', 'hakenkreuz', 'siegheil',
 ];
+// Neškodná slova, která by filtr jinak chytil (např. „Picasso", „grape").
+const SAFE_WORDS = ['picasso', 'grape', 'drape', 'scrape', 'therapeut', 'dickens', 'mobydick', 'nazim', 'nazir', 'ukrajin'];
+// Jména, která by mohla vypadat jako správce hry.
+const RESERVED = ['admin', 'administrator', 'moderator', 'dopisto', 'system', 'server', 'support', 'podpora'];
 
 const LEET = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '@': 'a', '$': 's', '!': 'i' };
 
@@ -21,9 +27,14 @@ function normalizeForFilter(s) {
   return t.replace(/[^a-z]/g, '');
 }
 
+function collapseRepeats(s) { return s.replace(/(.)\1+/g, '$1'); }
+
 function isProfane(nick) {
   const n = normalizeForFilter(nick);
-  return BLOCKED_STEMS.some(stem => n.includes(stem));
+  if (RESERVED.includes(n)) return true;
+  let w = n;
+  for (const safe of SAFE_WORDS) w = w.split(safe).join('');
+  return [w, collapseRepeats(w)].some(v => BLOCKED_STEMS.some(stem => v.includes(stem)));   // „kuuurva" → „kurva"
 }
 
 // Vrací { ok: true, nick } nebo { ok: false, message }.
@@ -55,7 +66,7 @@ const LIMITS = {
   submit_word: [12, 5000], submit_daily_word: [12, 5000],
   start_daily_challenge: [4, 10000], end_daily_challenge: [4, 10000],
   send_reaction: [8, 5000], get_leaderboard: [10, 10000], get_daily_leaderboard: [10, 10000],
-  get_daily_bonus: [10, 10000], get_daily_info: [10, 10000], get_daily_stats: [6, 10000], get_my_stats: [6, 10000], get_online: [8, 10000], submit_report: [3, 60000], report_player: [4, 60000], rejoin_room: [6, 10000], br_find: [6, 10000], br_create_lobby: [6, 10000], br_join_lobby: [8, 10000], br_start_lobby: [4, 10000], br_submit_word: [12, 5000], br_pass: [4, 5000], br_reverse: [4, 5000], br_leave: [4, 10000], br_rejoin: [6, 10000], give_up: [4, 10000],
+  get_daily_bonus: [10, 10000], get_daily_info: [10, 10000], get_daily_stats: [6, 10000], get_my_stats: [6, 10000], get_online: [8, 10000], submit_report: [3, 60000], report_player: [4, 60000], rejoin_room: [6, 10000], br_find: [6, 10000], br_create_lobby: [6, 10000], br_join_lobby: [8, 10000], br_start_lobby: [4, 10000], br_submit_word: [12, 5000], br_pass: [4, 5000], br_reverse: [4, 5000], br_leave: [4, 10000], br_rejoin: [6, 10000], br_rematch: [4, 10000], br_rematch_cancel: [6, 10000], give_up: [4, 10000],
   rematch_request: [4, 10000], rematch_accept: [4, 10000], rematch_decline: [4, 10000], result_left: [6, 10000],
 };
 const DEFAULT_LIMIT = [30, 10000];
@@ -65,7 +76,7 @@ const MAX_STRIKES = 8;
 const NEEDS_OBJECT = new Set([
   'find_match', 'create_lobby', 'join_lobby', 'submit_word', 'give_up', 'send_reaction',
   'get_leaderboard', 'submit_daily_word', 'rejoin_room', 'rematch_request', 'rematch_accept', 'rematch_decline', 'result_left', 'report_player', 'get_daily_stats', 'get_my_stats',
-  'br_find', 'br_create_lobby', 'br_join_lobby', 'br_submit_word', 'br_pass', 'br_reverse', 'br_leave', 'br_rejoin',
+  'br_find', 'br_create_lobby', 'br_join_lobby', 'br_submit_word', 'br_pass', 'br_reverse', 'br_leave', 'br_rejoin', 'br_rematch', 'br_rematch_cancel',
 ]);
 
 function attachSocketGuard(socket) {

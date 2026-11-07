@@ -64,6 +64,7 @@ function renderBrLobby(d) {
     <div class="card mid" style="text-align:center">
       <p style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:0">Battle Royale · lobby</p>
       <div class="lobby-code" id="lobbyCodeNum">${esc(d.code)}</div>
+      <div class="lobby-time">⏱ Čas na odpověď: <b>${d.turnSec || 15} s</b></div>
       <p style="color:var(--muted); font-size:11px">Pošli tento kód kamarádům, ať ho zadají v Hrát online → Royale → „Připojit“.</p>
       <div class="br-lobby-list">${rows}</div>
       ${d.isHost
@@ -128,7 +129,8 @@ function brRingSync() {
     el.classList.toggle('next', upNext);
     el.classList.toggle('dead', !p.alive);
     el.classList.toggle('offline', !p.connected && p.alive);
-    const nm = (p.alive ? '' : '💀 ') + p.name + (!p.connected && p.alive ? ' ⚠' : '');
+    const dcSec = !p.connected && p.alive && p.dcLeft ? Math.ceil(Math.max(0, p.dcLeft - (Date.now() - (br.stAt || Date.now()))) / 1000) : 0;
+    const nm = (p.alive ? '' : '💀 ') + p.name + (!p.connected && p.alive ? ' ⚠' + (dcSec ? ' ' + dcSec : '') : '');
     const nameEl = el.children[0];
     if (nameEl.dataset.k !== nm) { nameEl.dataset.k = nm; nameEl.innerHTML = `<span class="br-dot"></span>${esc(nm)}`; }
     // srdce: přeříznu jen to, které se změnilo
@@ -187,6 +189,7 @@ function renderBrGame() {
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       <div class="br-head">
         <span class="br-round" id="brRound"></span>
+        <button id="brLeaveBtn" class="br-leave" type="button">✕ Opustit</button>
         <span class="br-dir" id="brDir"></span>
       </div>
       ${dailyBonusChipHtml(st.bonus, 'gameBonusChip').replace('· +3 s', '· metr ❤')}
@@ -211,7 +214,6 @@ function renderBrGame() {
         <button type="button" class="br-pw" id="brRevBtn"><b>⇄ Obrátit směr</b><small>řada jde zpět</small></button>
       </div>
       <div class="used-count" id="brUsed"></div>
-      <div class="game-footer"><button id="brLeaveBtn" class="link-btn giveup-link">Opustit hru</button></div>
       <div class="feed" id="feed"></div>
     </div>`;
   document.getElementById('soundBtn').onclick = toggleSound;
@@ -576,18 +578,28 @@ function renderBrResult(d) {
         <div class="rules-panel" id="panel-brhist"><div class="rules-body feed word-history" style="max-height:220px">${hist}</div></div>
       </div>
       <div class="menu-list" style="margin-top:20px">
-        <button class="menu-item" id="brAgainBtn"><span class="ic">🔎</span><span>Hrát znovu</span></button>
+        <button class="menu-item" id="brRematchBtn"><span class="ic">🔁</span><span id="brRematchTxt">Odveta se stejnými hráči</span></button>
+        <button class="secondary small" id="brAgainBtn" style="width:100%">Najít nové hráče</button>
         <button class="secondary small" id="brMenuBtn" style="width:100%">Zpět do menu</button>
       </div>
     </div>`;
   bindRulesPanels();
+  br.rm = br.rm || { ready: [], total: 0, mine: false, note: '' };
+  brRematchRender();
+  document.getElementById('brRematchBtn').onclick = () => {
+    if (!br) return;
+    if (br.rm.mine) { br.rm.mine = false; br.rm.note = ''; socket.emit('br_rematch_cancel', { roomId: br.roomId }); }
+    else { br.rm.mine = true; br.rm.note = ''; socket.emit('br_rematch', { roomId: br.roomId }); }
+    brRematchRender();
+  };
   document.getElementById('brAgainBtn').onclick = () => {
     const n = loadNickname();
+    if (br) socket.emit('br_rematch_cancel', { roomId: br.roomId });
     br = null;
     socket.emit('br_find', { nickname: n });
     renderBrQueue(1);
   };
-  document.getElementById('brMenuBtn').onclick = () => { br = null; renderMenu(); };
+  document.getElementById('brMenuBtn').onclick = () => { if (br) socket.emit('br_rematch_cancel', { roomId: br.roomId }); br = null; renderMenu(); };
 }
 
 // ---- socket události ----
@@ -608,6 +620,31 @@ socket.on('br_error', ({ message }) => {
   if (['joining', 'queue', 'lobby'].includes(brScreen)) renderBrMenu(message);
 });
 
+function brRematchRender() {
+  const t = document.getElementById('brRematchTxt');
+  const b = document.getElementById('brRematchBtn');
+  if (!t || !b || !br || !br.rm) return;
+  const { ready, total, mine, note } = br.rm;
+  b.classList.toggle('active', !!mine);
+  if (note) t.textContent = note;
+  else if (mine) t.textContent = `Čekám na ostatní (${ready.length}/${Math.max(total, ready.length)}) · zrušit`;
+  else if (ready.length) t.textContent = `Odveta: ${ready.length}/${total} chce hrát · přidat se`;
+  else t.textContent = 'Odveta se stejnými hráči';
+}
+socket.on('br_rematch_state', (d) => {
+  if (!br || d.roomId !== br.roomId) return;
+  br.rm = br.rm || { ready: [], total: 0, mine: false, note: '' };
+  if (!br.rm.mine && !br.rm.ready.length && d.ready.length) vibrate(20);
+  br.rm.ready = d.ready; br.rm.total = d.total; br.rm.mine = d.mine; br.rm.note = '';
+  brRematchRender();
+});
+socket.on('br_rematch_expired', (d) => {
+  if (!br || d.roomId !== br.roomId) return;
+  br.rm = { ready: [], total: 0, mine: false, note: 'Odveta nevyšla — ostatní odešli.' };
+  brRematchRender();
+  setTimeout(() => { if (br && br.rm && br.rm.note) { br.rm.note = ''; brRematchRender(); } }, 4000);
+});
+
 socket.on('br_found', (d) => {
   clearInterval(menuTimer);
   br = { roomId: d.roomId, youAre: d.youAre, token: d.token, players: d.players, st: d.state, spectating: false, over: false, lastKey: null, shownPattern: null, spectatorNote: false };
@@ -621,7 +658,8 @@ socket.on('br_state', (st) => {
   const prev = br.st;
   const ev = st.event;
   if (ev && ev.type === 'timeout') br.breakReason = brReasonText(ev, st);
-  br.st = st;
+  br.st = st; br.stAt = Date.now();
+  if (prev && st.players.some((p, i) => i !== br.youAre && prev.players[i] && prev.players[i].connected && !p.connected && p.alive)) vibrate([30, 50, 30]);
   brSetBase(st);
   if (brScreen !== 'game') return;
   brRender();
@@ -681,7 +719,7 @@ socket.on('connect', () => {
 socket.on('br_rejoined', (d) => {
   if (!br) return;
   hideReconnectOverlay();
-  br.st = d.state; br.players = d.players;
+  br.st = d.state; br.stAt = Date.now(); br.players = d.players;
   renderBrGame();
 });
 socket.on('br_rejoin_failed', () => {
@@ -690,6 +728,11 @@ socket.on('br_rejoin_failed', () => {
   br = null;
   renderMenu('Spojení s Battle Royale se nepodařilo obnovit — hra mezitím skončila.');
 });
+
+// Odpočet u odpojeného hráče (jednou za vteřinu)
+setInterval(() => {
+  if (br && !br.over && brScreen === 'game' && br.st && br.st.players.some(p => p.alive && !p.connected && p.dcLeft)) brRingSync();
+}, 1000);
 
 // Barevné pozadí platí jen ve hře — na jiných obrazovkách se vypne.
 setInterval(() => {
