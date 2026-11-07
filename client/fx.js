@@ -48,15 +48,19 @@ function fxFlash(rgb) {
 }
 
 // Konfety + zlatá záře při výhře.
-function fxConfetti() {
+function fxConfetti(palette, power) {
   if (fxReduced()) return;
+  const k = power || 1;
   const layer = fxLayer();
-  const glow = document.createElement('div');
-  glow.className = 'fx-glow';
-  layer.appendChild(glow);
-  setTimeout(() => glow.remove(), 2200);
-  const colors = ['#ff3b30', '#ffc93c', '#34d399', '#3b82f6', '#a855f7', '#fb923c', '#ffffff'];
-  for (let i = 0; i < 80; i++) {
+  if (k >= 1) {
+    const glow = document.createElement('div');
+    glow.className = 'fx-glow';
+    layer.appendChild(glow);
+    setTimeout(() => glow.remove(), 2600);
+  }
+  const colors = palette || ['#ff3b30', '#ffc93c', '#34d399', '#3b82f6', '#a855f7', '#fb923c', '#ffffff'];
+  const n = Math.round(80 * k);
+  for (let i = 0; i < n; i++) {
     const c = document.createElement('i');
     c.className = 'fx-conf';
     c.style.left = Math.random() * 100 + 'vw';
@@ -65,10 +69,10 @@ function fxConfetti() {
     c.style.height = 8 + Math.random() * 10 + 'px';
     c.style.setProperty('--sway', (Math.random() * 120 - 60) + 'px');
     c.style.setProperty('--spin', (360 + Math.random() * 720) + 'deg');
-    c.style.animationDuration = 2.2 + Math.random() * 1.8 + 's';
-    c.style.animationDelay = Math.random() * 0.7 + 's';
+    c.style.animationDuration = 3 + Math.random() * 2.4 + 's';
+    c.style.animationDelay = Math.random() * 0.9 + 's';
     layer.appendChild(c);
-    setTimeout(() => c.remove(), 5000);
+    setTimeout(() => c.remove(), 7000);
   }
 }
 

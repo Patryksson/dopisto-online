@@ -45,9 +45,13 @@ function recordResult(mode, winnerName, loserName) {
   return { before, after: { winner: newWinnerElo, loser: newLoserElo } };
 }
 
+// Hosté ("Host 1234") se do žebříčků nezapisují.
+function isGuestName(n) { return /^Host \d{4}$/.test(String(n || '')); }
+
 function leaderboard(mode, limit = 100) {
   const m = db[mode] || {};
   return Object.values(m)
+    .filter(p => !isGuestName(p.name))
     .sort((a, b) => b.elo - a.elo)
     .slice(0, limit)
     .map(p => ({ name: p.name, elo: p.elo, wins: p.wins, losses: p.losses }));
@@ -69,7 +73,7 @@ function recordDaily(nickname, wordCount) {
 
 function dailyLeaderboard(limit = 20) {
   const today = (db.daily && db.daily[utcDateKey()]) || {};
-  return Object.values(today).sort((a, b) => b.count - a.count).slice(0, limit);
+  return Object.values(today).filter(e => !isGuestName(e.name)).sort((a, b) => b.count - a.count).slice(0, limit);
 }
 
 // Statistiky dne: percentil, medián, průměr a rozložení. Počítají se jen
@@ -118,4 +122,16 @@ function addReport(r) {
   fs.writeFileSync(REPORTS_FILE, JSON.stringify(list.slice(-500), null, 1));
 }
 
-module.exports = { addReport, getProfile, recordResult, leaderboard, recordDaily, dailyLeaderboard, dailyStats };
+// Souhrn her hráče napříč módy (výhry/prohry z ELO profilů; Royale se do ELO nezapisuje).
+function playerStats(nickname) {
+  const k = key(nickname || '');
+  let wins = 0, losses = 0;
+  Object.keys(db).forEach(m => {
+    if (m === 'daily') return;
+    const p = db[m] && db[m][k];
+    if (p) { wins += p.wins || 0; losses += p.losses || 0; }
+  });
+  return { games: wins + losses, wins, losses };
+}
+
+module.exports = { playerStats, addReport, getProfile, recordResult, leaderboard, recordDaily, dailyLeaderboard, dailyStats };

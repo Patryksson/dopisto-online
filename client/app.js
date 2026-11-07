@@ -161,13 +161,13 @@ function playTick() {
   osc.stop(ctx.currentTime + 0.05);
 }
 
-function playTickUrgent() {
+function playTickUrgent(freq) {
   if (!soundOn('ticks')) return;
   const ctx = ensureAudioCtx();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.type = 'square';
-  osc.frequency.value = 1700;
+  osc.frequency.value = freq || 1700;
   gain.gain.setValueAtTime(0.11, ctx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
   osc.connect(gain).connect(ctx.destination);
@@ -422,48 +422,76 @@ function showDailyBonusHit(clockId) {
 let game = null; // aktivní kolo (zrcadlo serverového stavu)
 
 // ==== Menu ====
-// Přezdívka: při prvním spuštění vstupní pole, potom jen řádek "Hraješ jako …".
-function nicknameBlockHtml() {
+// Přezdívka: při prvním spuštění vyskočí okno (vlastní přezdívka, nebo host s náhodným číslem).
+// Potom je přezdívka jen čip vlevo nahoře; klepnutím se změní.
+function isGuest() { return localStorage.getItem('dopisto_guest') === '1' && /^Host \d{4}$/.test(loadNickname()); }
+function randomGuestName() { return 'Host ' + String(1000 + Math.floor(Math.random() * 9000)); }
+
+function nickChipHtml() {
   const n = loadNickname();
-  if (!n) {
-    return `
-      <div class="nick-intro">Jak ti máme říkat?</div>
-      <div class="nickname-box">
-        <svg class="nickname-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.5-7 8-7s8 3 8 7"></path></svg>
-        <input id="nickname" placeholder="Tvoje přezdívka" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="20" />
-      </div>`;
-  }
-  return `<div class="player-line" id="playerLine">👤 Hraješ jako <b>${esc(n)}</b> <button type="button" class="link-btn" id="changeNickBtn">změnit</button></div>`;
+  if (!n) return '';
+  return `<button type="button" class="nick-chip" id="nickChip" title="Změnit přezdívku"><i class="dot"></i><span class="nc-name">${esc(n)}</span><span class="nc-mark">${isGuest() ? '✎' : '▾'}</span></button>`;
 }
 
-// Aktuální přezdívka — z vstupního pole, pokud je zrovna vidět, jinak uložená.
-function currentNick() {
-  const input = document.getElementById('nickname');
-  return (input ? input.value : loadNickname()).trim();
+// Aktuální přezdívka = uložená.
+function currentNick() { return loadNickname().trim(); }
+
+function closeNickModal() {
+  const m = document.getElementById('nickModal');
+  if (m) { m.classList.add('out'); setTimeout(() => m.remove(), 180); }
+}
+
+function showNickModal(opts) {
+  opts = opts || {};
+  if (document.getElementById('nickModal')) return;
+  const edit = !!opts.edit;
+  const guestName = randomGuestName();
+  const o = document.createElement('div');
+  o.id = 'nickModal';
+  o.className = 'nick-modal';
+  o.innerHTML = `
+    <div class="nick-box" role="dialog" aria-modal="true" aria-label="Přezdívka">
+      <h3>${edit ? 'Změnit přezdívku' : 'Vítej v Dopišto'}</h3>
+      <div class="nick-sub">${edit ? 'Zadej novou přezdívku, nebo hraj jako host.' : 'Zvol si přezdívku, nebo hraj jako host.'}</div>
+      <input id="nickInput" placeholder="Tvoje přezdívka…" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="20" value="${edit && !isGuest() ? esc(loadNickname()) : ''}" />
+      <div class="nick-err" id="nickErr">${opts.notice ? esc(opts.notice) : ''}</div>
+      <button type="button" class="nick-ok" id="nickOk">Pokračovat</button>
+      <div class="nick-or"><span></span>nebo<span></span></div>
+      <button type="button" class="nick-guest" id="nickGuest">Hrát jako ${esc(guestName)}</button>
+      ${edit ? '<button type="button" class="nick-cancel" id="nickCancel">Zrušit</button>' : ''}
+    </div>`;
+  document.body.appendChild(o);
+  const input = document.getElementById('nickInput');
+  const finish = (name, guest) => {
+    saveNickname(name);
+    try { if (guest) localStorage.setItem('dopisto_guest', '1'); else localStorage.removeItem('dopisto_guest'); } catch {}
+    closeNickModal();
+    renderMenu();
+  };
+  const submit = () => {
+    const n = input.value.trim();
+    const err = document.getElementById('nickErr');
+    if (n.length < 2) { err.textContent = n ? 'Přezdívka musí mít aspoň 2 znaky.' : 'Zadej přezdívku, nebo hraj jako host.'; return; }
+    finish(n, false);
+  };
+  document.getElementById('nickOk').onclick = submit;
+  document.getElementById('nickGuest').onclick = () => finish(guestName, true);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  const c = document.getElementById('nickCancel');
+  if (c) c.onclick = closeNickModal;
+  if (edit) o.addEventListener('click', (e) => { if (e.target === o) closeNickModal(); });
+  if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) input.focus();
 }
 
 function bindNicknameBlock() {
-  const btn = document.getElementById('changeNickBtn');
-  if (!btn) return;
-  btn.onclick = () => {
-    const line = document.getElementById('playerLine');
-    line.outerHTML = `
-      <div class="nickname-box" id="nickEdit">
-        <svg class="nickname-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.5-7 8-7s8 3 8 7"></path></svg>
-        <input id="nickname" placeholder="Tvoje přezdívka" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="20" value="${esc(loadNickname())}" />
-      </div>`;
-    const input = document.getElementById('nickname');
-    input.focus(); input.select();
-  };
+  const chip = document.getElementById('nickChip');
+  if (chip) chip.onclick = () => showNickModal({ edit: true });
 }
 
-// Ověří přezdívku; vrátí ji, nebo zobrazí chybu a vrátí ''.
+// Ověří přezdívku; vrátí ji, nebo otevře okno pro výběr a vrátí ''.
 function requireNick() {
   const n = currentNick();
-  const err = document.getElementById('err');
-  if (!n) { if (err) err.textContent = 'Zadej přezdívku.'; return ''; }
-  if (n.length < 2) { if (err) err.textContent = 'Přezdívka musí mít aspoň 2 znaky.'; return ''; }
-  saveNickname(n);
+  if (n.length < 2) { showNickModal({}); return ''; }
   return n;
 }
 
@@ -490,18 +518,79 @@ function settingsHtml() {
   }).join('') + '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře. „Vlastní klávesnice“ a „Předvyplnit zadání“ se projeví od příští hry.</div>';
 }
 
+// ---- Statistiky hráče (pod denní výzvou) ----
+let myStats = null;
+function statsCardHtml() {
+  const st = myStats;
+  const games = st ? st.games : '–';
+  const pct = st && st.games ? Math.round(st.wins / st.games * 100) + ' %' : '–';
+  return `
+      <div class="stats-card" id="statsCard">
+        <div class="sc-title">Moje statistiky</div>
+        <div class="sc-row">
+          <div><b id="stGames">${games}</b><span>her</span></div>
+          <div><b id="stWin">${pct}</b><span>výhry</span></div>
+          <div><b>🔥 ${currentStreak() || 0}</b><span>série</span></div>
+        </div>
+      </div>`;
+}
+function loadMyStats() {
+  const n = loadNickname();
+  if (!n) return;
+  socket.emit('get_my_stats', { nickname: n }, (st) => {
+    if (!st) return;
+    myStats = st;
+    const g = document.getElementById('stGames'), w = document.getElementById('stWin');
+    if (g) g.textContent = st.games;
+    if (w) w.textContent = st.games ? Math.round(st.wins / st.games * 100) + ' %' : '–';
+  });
+}
+
+// ---- Spodní panel pro pravidla / návod / nastavení ----
+function closeInfoSheet() {
+  const m = document.getElementById('infoSheet');
+  if (m) { m.classList.add('out'); setTimeout(() => m.remove(), 180); }
+}
+function showInfoSheet(title, html, onMount) {
+  closeInfoSheet();
+  const o = document.createElement('div');
+  o.id = 'infoSheet';
+  o.className = 'nick-modal sheet';
+  o.innerHTML = `<div class="sheet-box" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <div class="sheet-head"><h3>${esc(title)}</h3><button type="button" class="sheet-x" id="sheetX" aria-label="Zavřít">✕</button></div>
+    <div class="sheet-body">${html}</div></div>`;
+  document.body.appendChild(o);
+  document.getElementById('sheetX').onclick = closeInfoSheet;
+  o.addEventListener('click', (e) => { if (e.target === o) closeInfoSheet(); });
+  if (onMount) onMount(o);
+}
+function bindSettingsInputs(root) {
+  root.querySelectorAll('input[data-pref]').forEach(cb => {
+    cb.onchange = () => {
+      soundPrefs[cb.dataset.pref] = cb.checked;
+      saveSoundPrefs();
+      if (cb.checked) {
+        ensureAudioCtx();
+        ({ ticks: playTick, clicks: playClick, words: playSwoosh, penalty: playPenalty, results: playVictory }[cb.dataset.pref] || (() => {}))();
+        if (cb.dataset.pref === 'vibrate') vibrate(40);
+      }
+    };
+  });
+}
+
 function renderMenu(notice) {
   clearInterval(menuTimer);
+  closeInfoSheet();
   const saved = getSavedDailyResult();
 
   app.innerHTML = `
     <div class="page home">
     <div class="card">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
+      ${nickChipHtml()}
       <div class="logo-wrap"><img class="logo" src="logo.png" alt="Dopišto" /></div>
       <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
 
-      ${nicknameBlockHtml()}
       <div class="error" id="err">${notice || ''}</div>
 
       <div class="menu-list">
@@ -516,24 +605,14 @@ function renderMenu(notice) {
         ${streakHtml()}
       </div>
 
-      <div class="rules">
-        <button type="button" class="rules-summary" data-panel="p1"><span class="ic">ⓘ</span><span>Jak to funguje</span><span class="chevron">›</span></button>
-        <div class="rules-panel" id="panel-p1"><div class="rules-body">${HOW_IT_WORKS_HTML}</div></div>
-      </div>
+      ${statsCardHtml()}
 
-      <div class="rules">
-        <button type="button" class="rules-summary" data-panel="p2"><span class="ic">▤</span><span>Pravidla</span><span class="chevron">›</span></button>
-        <div class="rules-panel" id="panel-p2"><div class="rules-body">${RULES_HTML}</div></div>
-      </div>
-
-      <div class="rules">
-        <button type="button" class="rules-summary" id="leaderboardLinkBtn"><span class="ic">★</span><span>Žebříček</span><span class="chevron">›</span></button>
-      </div>
-
-      <div class="rules">
-        <button type="button" class="rules-summary" data-panel="p3"><span class="ic">⚙️</span><span>Nastavení</span><span class="chevron">›</span></button>
-        <div class="rules-panel" id="panel-p3"><div class="rules-body" id="settingsBody">${settingsHtml()}</div></div>
-      </div>
+      <nav class="tabbar" aria-label="Menu">
+        <button type="button" class="tab" id="tabHow"><b>ⓘ</b><span>Jak to funguje</span></button>
+        <button type="button" class="tab" id="tabRules"><b>▤</b><span>Pravidla</span></button>
+        <button type="button" class="tab" id="tabBoard"><b>★</b><span>Žebříček</span></button>
+        <button type="button" class="tab" id="tabSettings"><b>⚙️</b><span>Nastavení</span></button>
+      </nav>
     </div>
 
     ${footerHtml()}
@@ -544,18 +623,12 @@ function renderMenu(notice) {
   document.getElementById('soundBtn').onclick = toggleSound;
   bindNicknameBinding();
   bindRulesPanels();
-  document.querySelectorAll('#settingsBody input[data-pref]').forEach(cb => {
-    cb.onchange = () => {
-      soundPrefs[cb.dataset.pref] = cb.checked;
-      saveSoundPrefs();
-      if (cb.checked) {
-        ensureAudioCtx();
-        ({ ticks: playTick, clicks: playClick, words: playSwoosh, penalty: playPenalty, results: playVictory }[cb.dataset.pref] || (() => {}))();
-        if (cb.dataset.pref === 'vibrate') vibrate(40);
-      }
-    };
-  });
-  document.getElementById('leaderboardLinkBtn').onclick = () => renderLeaderboard(selectedMode === 'br' ? 2 : selectedMode);
+  if (!loadNickname()) showNickModal({ notice });
+  document.getElementById('tabHow').onclick = () => showInfoSheet('Jak to funguje', `<div class="rules-body">${HOW_IT_WORKS_HTML}</div>`);
+  document.getElementById('tabRules').onclick = () => showInfoSheet('Pravidla', `<div class="rules-body">${RULES_HTML}</div>`);
+  document.getElementById('tabBoard').onclick = () => renderLeaderboard(selectedMode === 'br' ? 2 : selectedMode);
+  document.getElementById('tabSettings').onclick = () => showInfoSheet('Nastavení', `<div id="settingsBody">${settingsHtml()}</div>`, bindSettingsInputs);
+  loadMyStats();
   document.getElementById('playBtn').onclick = () => {
     if (!requireNick()) return;
     ensureAudioCtx();
@@ -1785,7 +1858,7 @@ function renderGame() {
   const turnTimerHtml = hasTurnTimer ? `
     <div class="turn-timer-wrap">
       <div class="turn-timer-label"><span>Čas na tah</span><span id="turnTimerNum">${(game.turnTimer / 1000).toFixed(1)} s</span></div>
-      <div class="turn-timer-bar-bg"><div class="turn-timer-bar" id="turnBar" style="width:100%"></div></div>
+      <div class="turn-timer-bar-bg"><div class="turn-timer-bar" id="turnBar"></div></div>
     </div>
   ` : '';
 
@@ -1899,7 +1972,7 @@ function updateClocksUI() {
     const cap = game.turnTimeCap || 10000;
     if (bar) {
       const pct = Math.max(0, Math.min(100, (game.turnTimer / cap) * 100));
-      bar.style.width = pct + '%';
+      bar.style.transform = 'scaleX(' + (pct / 100) + ')';
       bar.classList.toggle('urgent', game.turnTimer < 5000);
     }
     if (label) label.textContent = (Math.max(0, game.turnTimer) / 1000).toFixed(1) + ' s';

@@ -96,6 +96,7 @@ function brMeterHtml(p, goal) {
   return `<div class="br-meter" title="Denní bonusy → bonusové srdce">${h}</div>`;
 }
 
+// Kruh hráčů se postaví jednou; pak se jen opravují změněné části (animace běží dál, nic nebliká).
 function brRingHtml() {
   const st = br.st;
   const n = st.players.length;
@@ -103,16 +104,76 @@ function brRingHtml() {
     const ang = (90 + ((i - br.youAre + n) % n) * (360 / n)) * Math.PI / 180;
     const x = 50 + 39 * Math.cos(ang);
     const y = 48 + 40 * Math.sin(ang);
-    const active = st.phase === 'turn' && st.turn === i;
-    const upNext = st.phase !== 'turn' && st.nextTurn === i && p.alive;
-    const cls = ['br-seat', active ? 'active' : '', upNext ? 'next' : '', !p.alive ? 'dead' : '', i === br.youAre ? 'me' : '', !p.connected && p.alive ? 'offline' : ''].join(' ');
     return `
-      <div class="${cls}" id="brSeat${i}" style="left:${x.toFixed(1)}%; top:${y.toFixed(1)}%; --pc:${brColor(i).hex}; --pcrgb:${brColor(i).rgb}">
-        <div class="br-name"><span class="br-dot"></span>${p.alive ? '' : '💀 '}${esc(p.name)}${!p.connected && p.alive ? ' ⚠' : ''}</div>
-        <div class="br-hearts">${p.alive ? brHeartsHtml(p, st.maxLives) : `<span class="br-place">${p.place}. místo</span>`}</div>
-        ${p.alive ? brMeterHtml(p, st.meterGoal) : ''}
+      <div class="br-seat${i === br.youAre ? ' me' : ''}" id="brSeat${i}" style="left:${x.toFixed(1)}%; top:${y.toFixed(1)}%; --pc:${brColor(i).hex}; --pcrgb:${brColor(i).rgb}">
+        <div class="br-name"></div>
+        <div class="br-hearts"></div>
+        <div class="br-meterwrap"></div>
       </div>`;
   }).join('');
+}
+
+function brRingSync() {
+  const host = document.getElementById('brSeats');
+  if (!host || !br) return;
+  const st = br.st;
+  const sig = st.players.length + ':' + br.youAre + ':' + st.players.map(p => p.color).join(',');
+  if (host.dataset.sig !== sig) { host.innerHTML = brRingHtml(); host.dataset.sig = sig; }
+  st.players.forEach((p, i) => {
+    const el = document.getElementById('brSeat' + i);
+    if (!el) return;
+    const active = st.phase === 'turn' && st.turn === i;
+    const upNext = st.phase !== 'turn' && st.nextTurn === i && p.alive;
+    el.classList.toggle('active', active);
+    el.classList.toggle('next', upNext);
+    el.classList.toggle('dead', !p.alive);
+    el.classList.toggle('offline', !p.connected && p.alive);
+    const nm = (p.alive ? '' : '💀 ') + p.name + (!p.connected && p.alive ? ' ⚠' : '');
+    const nameEl = el.children[0];
+    if (nameEl.dataset.k !== nm) { nameEl.dataset.k = nm; nameEl.innerHTML = `<span class="br-dot"></span>${esc(nm)}`; }
+    // srdce: přeříznu jen to, které se změnilo
+    const hEl = el.children[1];
+    const hk = p.alive ? `${p.lives}/${st.maxLives}` : `p${p.place}`;
+    if (hEl.dataset.k !== hk) {
+      const prev = hEl.dataset.k !== undefined && hEl.dataset.lives !== undefined ? Number(hEl.dataset.lives) : null;
+      hEl.dataset.k = hk;
+      hEl.dataset.lives = p.alive ? String(p.lives) : '';
+      hEl.innerHTML = p.alive ? brHeartsHtml(p, st.maxLives) : `<span class="br-place">${p.place}. místo</span>`;
+      if (p.alive && prev !== null && !isNaN(prev) && prev !== p.lives) {
+        const kids = hEl.children;
+        const lo = Math.min(prev, p.lives), hi = Math.max(prev, p.lives);
+        for (let k = lo; k < hi && k < kids.length; k++) kids[k].classList.add(p.lives < prev ? 'lose' : 'gain');
+      }
+    }
+    const mEl = el.children[2];
+    const mk = p.alive ? `${p.meter}/${st.meterGoal}` : '';
+    if (mEl.dataset.k !== mk) {
+      const prevM = mEl.dataset.m !== undefined && mEl.dataset.m !== '' ? Number(mEl.dataset.m) : null;
+      mEl.dataset.k = mk;
+      mEl.dataset.m = p.alive ? String(p.meter) : '';
+      mEl.innerHTML = p.alive ? brMeterHtml(p, st.meterGoal) : '';
+      if (p.alive && prevM !== null && p.meter > prevM) { const pip = mEl.querySelectorAll('.br-pip')[p.meter - 1]; if (pip) pip.classList.add('fill'); }
+    }
+  });
+  brSpotSync();
+}
+
+// Světelný kroužek, který plynule putuje k hráči, který je na tahu.
+function brSpotSync() {
+  const spot = document.getElementById('brSpot');
+  if (!spot || !br) return;
+  const st = br.st;
+  const actor = st.phase === 'turn' ? st.turn : st.nextTurn;
+  const seat = document.getElementById('brSeat' + actor);
+  const alive = st.players[actor] && st.players[actor].alive;
+  if (!seat || !alive) { spot.classList.remove('on'); return; }
+  spot.style.left = seat.style.left;
+  spot.style.top = seat.style.top;
+  spot.classList.toggle('dim', st.phase !== 'turn');
+  if (!spot.classList.contains('on')) {
+    spot.classList.add('on');
+    if (!spot.classList.contains('ready')) requestAnimationFrame(() => requestAnimationFrame(() => spot.classList.add('ready')));
+  }
 }
 
 function renderBrGame() {
@@ -131,14 +192,16 @@ function renderBrGame() {
       ${dailyBonusChipHtml(st.bonus, 'gameBonusChip').replace('· +3 s', '· metr ❤')}
       <div class="br-ring" id="brRing">
         <svg class="br-dir-svg" id="brDirSvg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><ellipse cx="50" cy="48" rx="39" ry="40"/></svg>
+        <div class="br-spot" id="brSpot"></div>
         <div class="br-center">
           <div id="brPattern"></div>
           <div class="br-timer" id="brTimer"></div>
+          <div class="br-yturn" id="brYTurn">🔔 Tvůj tah</div>
         </div>
         <div id="brSeats"></div>
       </div>
       <div class="turn-timer-wrap" id="brBarWrap">
-        <div class="turn-timer-bar-bg"><div class="turn-timer-bar" id="brBar" style="width:100%"></div></div>
+        <div class="turn-timer-bar-bg"><div class="turn-timer-bar" id="brBar"></div></div>
       </div>
       <div class="turn-status" id="brStatus"></div>
       <div class="last-word" id="brBanner"></div>
@@ -220,7 +283,7 @@ function brRender(force) {
   q('brDir').innerHTML = st.dir === 1 ? '↻ po směru' : '↺ proti směru';
   const dsvg = q('brDirSvg');
   if (dsvg) dsvg.classList.toggle('ccw', st.dir === -1);
-  q('brSeats').innerHTML = brRingHtml();
+  brRingSync();
 
   const patKey = st.pattern.type + st.pattern.value;
   const wordInput = q('wordInput');
@@ -240,6 +303,8 @@ function brRender(force) {
   }
 
   const mine = st.phase === 'turn' && st.turn === br.youAre && me.alive;
+  const yt = q('brYTurn'); if (yt) yt.classList.toggle('show', mine);
+  if (!mine && br.badgeOn) brTurnBadge(false);
   const status = q('brStatus');
   status.classList.toggle('mine', mine);
   if (st.phase === 'reveal') status.innerHTML = `Tvoje barva: <b class="br-mycolor" style="color:${brColor(br.youAre).hex}">${brColor(br.youAre).name}</b> · začíná <b>${brName(st.nextTurn)}</b>`;
@@ -272,11 +337,13 @@ function brRender(force) {
   const key = `${st.round}:${st.turn}:${st.phase}`;
   if (st.phase === 'turn' && key !== br.lastKey && st.turn === br.youAre && me.alive) {
     playGo(); vibrate(40);
+    if (document.hidden) brTurnBadge(true);
     if (wordInput && document.activeElement !== wordInput) wordInput.focus();
   }
   br.lastKey = key;
   brSyncNewPattern();
   brTimers();
+  brStartLoop();
 }
 
 // Velké okno s novým zadáním (po ztrátě života) / začátkem zápasu — s odpočtem.
@@ -323,28 +390,85 @@ function brSyncNewPattern() {
   brTimers();
 }
 
+// Čas mezi serverovými tiky (200 ms) si dopočítává klient — odpočet pak běží hladce.
+function brSetBase(st) { br.tickAt = performance.now(); br.base = st.phase === 'turn' ? st.turnLeft : st.breakLeft; }
+function brCur(st) {
+  if (br.base == null) return st.phase === 'turn' ? st.turnLeft : st.breakLeft;
+  return Math.max(0, br.base - (performance.now() - br.tickAt));
+}
+let brRaf = 0;
+function brFrame() {
+  brRaf = 0;
+  if (!br || br.over || brScreen !== 'game') return;
+  brTimers();
+  brTickSound();
+  brRaf = requestAnimationFrame(brFrame);
+}
+function brStartLoop() { if (!brRaf) brRaf = requestAnimationFrame(brFrame); }
+
+// Tikání: do 5 s zrychluje a stoupá výškou. Já slyším silněji, ostatní jen posledních 3 s tiše.
+const BR_TICK_TH = [5000, 4000, 3000, 2000, 1500, 1000, 750, 500, 250];
+function brTickSound() {
+  const st = br.st;
+  if (st.phase !== 'turn') { br.tkKey = null; return; }
+  const key = st.round + ':' + st.turn;
+  if (br.tkKey !== key) { br.tkKey = key; br.tkIdx = 0; br.lastSec = null; }
+  const left = brCur(st);
+  const mine = st.turn === br.youAre && st.players[br.youAre].alive;
+  if (left > 5000) {
+    if (mine) { const sec = Math.ceil(left / 1000); if (sec !== br.lastSec) { br.lastSec = sec; playTick(); } }
+    return;
+  }
+  const n = BR_TICK_TH.filter(x => left <= x).length;
+  if (n > br.tkIdx) {
+    br.tkIdx = n;
+    if (mine) { playTickUrgent(1300 + n * 130); if (n >= 3) vibrate(12); }
+    else if (n >= 3) playTick();
+  }
+}
+
+// „Tvůj tah“ i když je aplikace v pozadí: titulek karty + odznak na ikoně (pokud ho prohlížeč podporuje).
+const BR_BASE_TITLE = document.title;
+function brTurnBadge(on) {
+  if (br) br.badgeOn = on;
+  try {
+    document.title = on ? '🔔 Tvůj tah! · Dopišto' : BR_BASE_TITLE;
+    if (on && navigator.setAppBadge) navigator.setAppBadge(1).catch(() => {});
+    if (!on && navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
+  } catch {}
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && br && br.badgeOn) brTurnBadge(false); });
+
 function brTimers() {
   if (!br || brScreen !== 'game') return;
   const st = br.st;
+  const cur = brCur(st);
   const cn = document.getElementById('brnCount');
   if (cn && st.phase !== 'turn') {
-    const s2 = Math.max(1, Math.ceil(st.breakLeft / 1000));
+    const s2 = Math.max(1, Math.ceil(cur / 1000));
     if (br.brnSec !== s2) { br.brnSec = s2; cn.textContent = String(s2); cn.classList.remove('pulse'); void cn.offsetWidth; cn.classList.add('pulse'); }
   }
-  fxDanger(st.phase === 'turn' && st.turnLeft < 3000);
+  fxDanger(st.phase === 'turn' && cur < 3000);
   const t = document.getElementById('brTimer');
   const bar = document.getElementById('brBar');
   if (!t) return;
+  let txt, cls, scale, urgent = false;
   if (st.phase === 'turn') {
-    const left = st.turnLeft;
-    t.textContent = left > 5000 ? String(Math.ceil(left / 1000)) : (left / 1000).toFixed(1);
-    t.className = 'br-timer' + (left < 5000 ? ' urgent' : '');
-    if (bar) { bar.style.width = Math.max(0, Math.min(100, left / st.turnMs * 100)) + '%'; bar.classList.toggle('urgent', left < 5000); }
+    txt = cur > 5000 ? String(Math.ceil(cur / 1000)) : (cur / 1000).toFixed(1);
+    urgent = cur < 5000;
+    cls = 'br-timer' + (urgent ? ' urgent' : '');
+    scale = Math.max(0, Math.min(1, cur / st.turnMs));
   } else {
-    const sec = Math.max(1, Math.ceil(st.breakLeft / 1000));
-    t.textContent = String(sec);
-    t.className = 'br-timer count';
-    if (bar) { bar.style.width = '0%'; bar.classList.remove('urgent'); }
+    txt = String(Math.max(1, Math.ceil(cur / 1000)));
+    cls = 'br-timer count';
+    scale = 0;
+  }
+  if (br.tTxt !== txt) { br.tTxt = txt; t.textContent = txt; }
+  if (br.tCls !== cls) { br.tCls = cls; t.className = cls; }
+  if (bar) {
+    bar.style.transition = 'none';
+    bar.style.transform = 'scaleX(' + scale + ')';
+    if (br.tUrg !== urgent) { br.tUrg = urgent; bar.classList.toggle('urgent', urgent); }
   }
 }
 
@@ -375,7 +499,7 @@ function brHandleEvent(ev, prevPlayers) {
   } else if (ev.type === 'timeout') {
     brSeatFlash(ev.seat, 'hit');
     fxHeartBurst(document.getElementById('brSeat' + ev.seat), ev.eliminated);
-    if (ev.eliminated) { const pc = brColor(br.st.players[ev.seat].color); fxShatter(document.getElementById('brSeat' + ev.seat), pc && pc.rgb); brSeatFlash(ev.seat, 'shatter'); }
+    if (ev.eliminated) { fxShatter(document.getElementById('brSeat' + ev.seat), brColor(ev.seat).rgb); brSeatFlash(ev.seat, 'shatter'); }
     if (ev.seat === me) fxFlash('255,59,48');
     playPenalty();
     if (ev.seat === me) { vibrate([60, 40, 120]); const c = document.querySelector('.card'); if (c) { c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); } }
@@ -421,12 +545,22 @@ function renderBrResult(d) {
   closeBrOverlay();
   const meSeat = br.youAre;
   const iWon = d.winnerSeat === meSeat;
-  if (iWon) { playVictory(); setTimeout(fxConfetti, 250); } else { playDefeat(); }
+  const wcol = d.winnerSeat != null ? brColor(d.winnerSeat) : null;
+  const total = d.ranking.length;
+  const STEP = 450, T0 = 500;
+  const winAt = T0 + Math.max(0, total - 1) * STEP;
+  if (iWon) setTimeout(playVictory, winAt - 150); else playDefeat();
+  if (wcol) {
+    const pal = [wcol.hex, wcol.soft, '#ffffff', '#ffc93c', wcol.hex];
+    setTimeout(() => fxConfetti(pal, 1), winAt);
+    setTimeout(() => fxConfetti(pal, 0.6), winAt + 1400);
+    setTimeout(() => fxConfetti(pal, 0.6), winAt + 2800);
+  }
   const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
   const names = {};
   br.players.forEach(p => { names[p.seat] = p.name; });
   const rows = d.ranking.map(r => `
-    <div class="br-rank${r.seat === meSeat ? ' me' : ''}">
+    <div class="br-rank rise${r.seat === meSeat ? ' me' : ''}${r.place === 1 ? ' gold' : ''}" style="animation-delay:${T0 + (total - r.place) * STEP}ms${r.place === 1 && wcol ? `; --wc:${wcol.rgb}` : ''}">
       <span class="br-rank-pos">${medals[r.place] || r.place + '.'}</span>
       <span class="br-rank-name">${esc(r.name)}</span>
       <span class="br-rank-words">${r.words} slov</span>
@@ -434,8 +568,8 @@ function renderBrResult(d) {
   const hist = (d.history || []).map(h => `<div class="p${h.seat === meSeat ? 0 : 1}">${esc(names[h.seat] || '?')}: ${esc(h.word)}</div>`).join('') || '<div style="color:var(--muted)">Nepadlo žádné slovo.</div>';
   app.innerHTML = `
     <div class="card result">
-      <h2 class="${iWon ? 'win' : 'lose'}">${iWon ? '👑 Vyhrál(a) jsi!' : 'Konec hry'}</h2>
-      <div style="color:var(--muted); font-size:13px">${d.winnerSeat != null ? `Vítěz: <b style="color:var(--ink)">${esc(names[d.winnerSeat] || '?')}</b>` : ''}</div>
+      <h2 class="${iWon ? 'win' : 'lose'} fin" style="animation-delay:${winAt}ms">${iWon ? '👑 Vyhrál(a) jsi!' : 'Konec hry'}</h2>
+      <div style="color:var(--muted); font-size:13px">${d.winnerSeat != null ? `Vítěz: <b style="color:${wcol ? wcol.hex : 'var(--ink)'}">${esc(names[d.winnerSeat] || '?')}</b>` : ''}</div>
       <div class="br-ranking">${rows}</div>
       <div class="rules">
         <button type="button" class="rules-summary" data-panel="brhist"><span class="ic">▤</span><span>Historie slov (${(d.history || []).length})</span><span class="chevron">›</span></button>
@@ -488,6 +622,7 @@ socket.on('br_state', (st) => {
   const ev = st.event;
   if (ev && ev.type === 'timeout') br.breakReason = brReasonText(ev, st);
   br.st = st;
+  brSetBase(st);
   if (brScreen !== 'game') return;
   brRender();
   brHandleEvent(ev, prev && prev.players);
@@ -500,16 +635,12 @@ socket.on('br_tick', (t) => {
   st.phase = t.phase;
   if (t.phase === 'turn') {
     st.turn = t.turn; st.turnLeft = t.turnLeft; st.turnMs = t.turnMs || st.turnMs;
-    if (st.turn === br.youAre && st.players[br.youAre].alive) {
-      const half = Math.floor(t.turnLeft / 500);
-      if (t.turnLeft <= 5000) { if (half !== br.lastHalf) { br.lastHalf = half; if (half > 0) playTickUrgent(); } }
-      else { const sec = Math.ceil(t.turnLeft / 1000); if (sec !== br.lastSec) { br.lastSec = sec; playTick(); } }
-    }
   } else {
     st.breakLeft = t.breakLeft;
     const sec = Math.ceil(t.breakLeft / 1000);
     if (sec !== br.lastBreakSec) { br.lastBreakSec = sec; if (sec > 0) playTick(); }
   }
+  brSetBase(st);
   brTimers();
 });
 
@@ -564,6 +695,7 @@ socket.on('br_rejoin_failed', () => {
 setInterval(() => {
   if (brScreen !== 'game' && document.body.classList.contains('br-live')) {
     document.body.classList.remove('br-live', 'vk-themed');
+    if (br && br.badgeOn) brTurnBadge(false);
     const bn = document.getElementById('brNew'); if (bn) bn.remove();
     ['--vk-main', '--vk-fg', '--vk-bg', '--vk-rgb', '--vk-on', '--br-rgb'].forEach(k => document.body.style.removeProperty(k));
   }
