@@ -378,8 +378,10 @@ function setupGame(io, socket) {
     }
   });
 
+  // Zadání denní výzvy se před spuštěním NEPOSÍLÁ (aby se na ni nikdo nemohl předem připravit);
+  // klient ho dostane v 'daily_started' a po dokončení v 'daily_over'. Bonus dne je veřejný.
   socket.on('get_daily_info', (cb) => {
-    if (typeof cb === 'function') cb({ bonus: publicBonus(dailyBonusForDate()), pattern: dailyPattern() });
+    if (typeof cb === 'function') cb({ bonus: publicBonus(dailyBonusForDate()) });
   });
   socket.on('get_daily_bonus', (cb) => { if (typeof cb === 'function') cb(publicBonus(dailyBonusForDate())); });
 

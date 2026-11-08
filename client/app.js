@@ -430,8 +430,43 @@ function randomGuestName() { return 'Host ' + String(1000 + Math.floor(Math.rand
 function nickChipHtml() {
   const n = loadNickname();
   if (!n) return '';
-  return `<button type="button" class="nick-chip" id="nickChip" title="Změnit přezdívku"><i class="dot"></i><span class="nc-name">${esc(n)}</span><span class="nc-mark">${isGuest() ? '✎' : '▾'}</span></button>`;
+  const icon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.2 3.6-7 8-7s8 2.8 8 7"/></svg>';
+  return `<button type="button" class="nick-chip acct${isGuest() ? ' guest' : ''}" id="nickChip" aria-haspopup="true" aria-expanded="false" aria-label="Účet: ${esc(n)}">${icon}<i class="dot"></i></button>`;
 }
+
+function closeAcctPop() {
+  const pop = document.getElementById('acctPop');
+  if (pop) pop.remove();
+  const chip = document.getElementById('nickChip');
+  if (chip) chip.setAttribute('aria-expanded', 'false');
+}
+
+function toggleAcctPop() {
+  if (document.getElementById('acctPop')) { closeAcctPop(); return; }
+  const chip = document.getElementById('nickChip');
+  const card = chip && chip.closest('.card');
+  if (!card) return;
+  const n = loadNickname();
+  const guest = isGuest();
+  const pop = document.createElement('div');
+  pop.id = 'acctPop';
+  pop.className = 'acct-pop';
+  pop.setAttribute('role', 'dialog');
+  pop.innerHTML = `
+    <div class="ap-label">Hraješ jako</div>
+    <div class="ap-name">${esc(n)}${guest ? '<span class="ap-badge">host</span>' : ''}</div>
+    <div class="ap-note">${guest ? 'Host se do žebříčku nezapočítává. Zvol si přezdívku a výsledky se ti budou ukládat.' : 'Pod touto přezdívkou se zapisují tvoje výsledky a žebříček.'}</div>
+    <button type="button" class="ap-btn" id="acctChange">✎ ${guest ? 'Zvolit přezdívku' : 'Změnit přezdívku'}</button>`;
+  card.appendChild(pop);
+  chip.setAttribute('aria-expanded', 'true');
+  document.getElementById('acctChange').onclick = () => { closeAcctPop(); showNickModal({ edit: true }); };
+}
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('acctPop')) return;
+  if (e.target.closest('#acctPop') || e.target.closest('#nickChip')) return;
+  closeAcctPop();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAcctPop(); });
 
 // Aktuální přezdívka = uložená.
 function currentNick() { return loadNickname().trim(); }
@@ -485,7 +520,7 @@ function showNickModal(opts) {
 
 function bindNicknameBlock() {
   const chip = document.getElementById('nickChip');
-  if (chip) chip.onclick = () => showNickModal({ edit: true });
+  if (chip) chip.onclick = toggleAcctPop;
 }
 
 // Ověří přezdívku; vrátí ji, nebo otevře okno pro výběr a vrátí ''.
@@ -598,8 +633,8 @@ function renderMenu(notice) {
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       ${nickChipHtml()}
       <div class="logo-wrap"><img class="logo" src="logo.png" alt="Dopišto" /></div>
+      <div class="tagline">Slovní online duel</div>
       <div class="online-line" id="onlineLine"></div>
-      <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
 
       <div class="error" id="err">${notice || ''}</div>
 
@@ -607,10 +642,18 @@ function renderMenu(notice) {
         <button class="menu-item" id="playBtn"><span class="ic">⚔</span><span>Hrát online</span></button>
       </div>
 
+      <div class="bonus-card" id="bonusCard">
+        <div class="bc-head"><span class="bc-title">✦ Denní bonus</span><span class="bc-tag">platí pouze dnes</span></div>
+        <div class="bc-main" id="bcMain">···</div>
+        <div class="bc-desc" id="bcDesc"></div>
+        <div class="bc-sub" id="bcSub">+3 s v duelech i denní výzvě · v Royale plní metr srdce</div>
+      </div>
+
       <div class="daily-card">
         <div class="dc-head"><span class="dc-title">🔥 Denní výzva</span><span class="dc-timer" id="dcTimer"></span></div>
-        <div class="dc-pattern" id="dcPattern">···</div>
-        <div class="dc-bonus" id="dcBonus"></div>
+        ${saved
+          ? `<div class="dc-pattern" id="dcPattern">${esc(((saved.pattern && saved.pattern.value) || '').toUpperCase())}···</div><div class="dc-note">Dnešní zadání · splněno ✓</div>`
+          : `<div class="dc-locked" id="dcPattern"><span class="lk">🔒</span><span>? ? · · ·</span></div><div class="dc-note">Zadání se odhalí až po spuštění — pro všechny stejné</div>`}
         <div class="menu-list"><button class="menu-item" id="dailyBtn"><span>${saved ? `Zobrazit výsledek · ${saved.wordCount} slov` : 'Hrát výzvu'}</span></button></div>
         ${streakHtml()}
       </div>
@@ -631,6 +674,7 @@ function renderMenu(notice) {
   `;
 
   document.getElementById('soundBtn').onclick = toggleSound;
+  fitOneLine(document.querySelector('.dc-note'), 11, 8.5);
   bindNicknameBinding();
   bindRulesPanels();
   if (!loadNickname()) showNickModal({ notice });
@@ -651,11 +695,13 @@ function renderMenu(notice) {
   tick();
   menuTimer = setInterval(() => { tick(); loadOnline(); }, 30000);
   socket.emit('get_daily_info', (info) => {
-    const pat = document.getElementById('dcPattern');
-    const bon = document.getElementById('dcBonus');
-    if (!info || !pat || !bon) return;
-    pat.textContent = info.pattern.value.toUpperCase() + '···';
-    bon.innerHTML = `<span class="dbc-ic">✦</span> Bonus dne: <b>${esc(info.bonus.label)}</b> · +3 s<div class="daily-bonus-desc">${esc(info.bonus.desc)}</div>`;
+    const main = document.getElementById('bcMain');
+    const desc = document.getElementById('bcDesc');
+    if (!info || !info.bonus || !main || !desc) return;
+    main.innerHTML = `${esc(info.bonus.label)} · <b>+3 s</b>`;
+    desc.textContent = BONUS_SHORT[info.bonus.id] || info.bonus.desc;
+    fitOneLine(desc, 11, 8.5);
+    fitOneLine(document.getElementById('bcSub'), 10.5, 8.5);
   });
 
   document.getElementById('dailyBtn').onclick = () => {
@@ -686,6 +732,45 @@ function bindRulesPanels() {
 }
 
 // Druhá úroveň: výběr režimu, hledání soupeře, lobby.
+// Royale (br.js) se stahuje až když ho hráč potřebuje – běžný duel ho nepotřebuje.
+let brLoadP = null;
+function loadBr() {
+  if (typeof window.brRenderReady !== 'undefined') return Promise.resolve();
+  if (brLoadP) return brLoadP;
+  const meta = document.querySelector('meta[name="lazy-br"]');
+  const src = (meta && meta.content) || 'br.js';
+  brLoadP = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => { brLoadP = null; s.remove(); reject(new Error('br.js')); };
+    document.head.appendChild(s);
+  });
+  return brLoadP;
+}
+// Zavolá fn až po načtení Royale; během čekání je tlačítko vypnuté.
+function withBr(btn, fn) {
+  const label = btn && btn.innerHTML;
+  if (btn) { btn.disabled = true; btn.style.opacity = '.7'; }
+  loadBr().then(fn).catch(() => {
+    const e = document.getElementById('err');
+    if (e) e.textContent = 'Royale se nepodařilo načíst. Zkontroluj připojení a zkus to znovu.';
+  }).finally(() => { if (btn && btn.isConnected) { btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = label; } });
+}
+
+// Popisky bonusu musí v boxu na hlavní stránce vyjít na jeden řádek.
+const BONUS_SHORT = {
+  lastSecond: 'Platné slovo, když ti zbývá méně než 5 s.',
+  comeback: 'Platné slovo, když máš méně času než soupeř.',
+};
+// Zmenšuje písmo, dokud se text nevejde na jeden řádek (při nedostatku místa ho useká s „…").
+function fitOneLine(el, maxPx, minPx) {
+  if (!el) return;
+  let size = maxPx;
+  el.style.fontSize = size + 'px';
+  while (el.scrollWidth > el.clientWidth + 1 && size > minPx) { size -= 0.5; el.style.fontSize = size + 'px'; }
+}
+
 const BR_TURN_CHOICES = [10, 15, 20, 30];
 let brTurnSec = 15;
 try { const v = Number(localStorage.getItem('dopisto_br_turn')); if (BR_TURN_CHOICES.includes(v)) brTurnSec = v; } catch {}
@@ -763,13 +848,14 @@ function renderPlayMenu(notice) {
     document.querySelectorAll('#brTimeChips .time-chip').forEach(b => { const on = b === btn; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
     vibrate(8);
   });
-  bindModeSegmented(() => selectedMode, (newMode) => { selectedMode = newMode; updateCustomPat(); });
+  bindModeSegmented(() => selectedMode, (newMode) => { selectedMode = newMode; updateCustomPat(); if (newMode === 'br') loadBr().catch(() => {}); });
   updateCustomPat();
+  if (selectedMode === 'br') loadBr().catch(() => {});
 
   document.getElementById('findBtn').onclick = () => {
     const n = requireNick(); if (!n) return;
     ensureAudioCtx();
-    if (selectedMode === 'br') { socket.emit('br_find', { nickname: n }); renderBrQueue(1); return; }
+    if (selectedMode === 'br') { withBr(document.getElementById('findBtn'), () => { socket.emit('br_find', { nickname: n }); renderBrQueue(1); }); return; }
     socket.emit('find_match', { nickname: n, mode: selectedMode });
     renderSearching(n);
   };
@@ -777,7 +863,7 @@ function renderPlayMenu(notice) {
   document.getElementById('createLobbyBtn').onclick = () => {
     const n = requireNick(); if (!n) return;
     ensureAudioCtx();
-    if (selectedMode === 'br') { brScreen = 'joining'; socket.emit('br_create_lobby', { nickname: n, turnSec: brTurnSec }); renderBrWait('Vytvářím lobby…'); return; }
+    if (selectedMode === 'br') { withBr(document.getElementById('createLobbyBtn'), () => { brScreen = 'joining'; socket.emit('br_create_lobby', { nickname: n, turnSec: brTurnSec }); renderBrWait('Vytvářím lobby…'); }); return; }
     let pattern = '';
     if (selectedMode === 2 || selectedMode === 'middle' || selectedMode === 'speed') {
       pattern = (document.getElementById('customPat').value || '').trim().toLowerCase();
@@ -797,7 +883,7 @@ function renderPlayMenu(notice) {
     const code = getJoinCode();
     if (code.length < 5) { err.textContent = 'Zadej celý kód lobby.'; return; }
     ensureAudioCtx();
-    if (selectedMode === 'br') { brScreen = 'joining'; socket.emit('br_join_lobby', { nickname: n, code }); renderBrWait('Připojuji se…'); return; }
+    if (selectedMode === 'br') { withBr(document.getElementById('joinLobbyBtn'), () => { brScreen = 'joining'; socket.emit('br_join_lobby', { nickname: n, code }); renderBrWait('Připojuji se…'); }); return; }
     socket.emit('join_lobby', { nickname: n, code });
     renderJoining();
   };

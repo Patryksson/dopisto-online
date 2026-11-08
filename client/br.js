@@ -2,6 +2,7 @@
 // Samostatný soubor — používá globální pomocné funkce z app.js (app, socket, esc,
 // zvuky, vlastní klávesnice, renderMenu, …). Serverová logika je v server/br.js.
 
+window.brRenderReady = true;
 let br = null; // { roomId, youAre, token, st, spectating, over, lastKey, ... }
 let brScreen = 'none'; // none | menu | joining | queue | lobby | game | result
 

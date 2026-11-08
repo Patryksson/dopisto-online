@@ -1025,3 +1025,49 @@ body.has-vk .br-spectate{margin:0 0 4px}
 .lobby-time{font-size:12px;color:var(--muted);letter-spacing:.06em;margin:2px 0 6px}
 .lobby-time b{color:var(--ink)}
 .time-chip{padding:7px 4px}.time-chips{margin-top:4px}
+
+/* Hlavní stránka: logo se zářící červenou aurou a podtitulem (stejně jako na sdíleném obrázku) */
+.page.home .logo-wrap{position:relative;overflow:visible}
+.page.home .logo-wrap::before{content:"";position:absolute;left:0;right:0;top:-70px;bottom:-60px;background:radial-gradient(ellipse 78% 58% at 50% 50%,rgba(255,59,48,.38),rgba(255,59,48,.10) 55%,transparent 75%);pointer-events:none;z-index:0}
+.page.home .logo{z-index:1}
+.page.home .tagline{text-align:center;font-size:12.5px;letter-spacing:.34em;text-transform:uppercase;color:#fff;font-weight:600;margin:2px 0 6px;padding-left:.34em;position:relative;z-index:1}
+@media (max-height:700px){.page.home .tagline{font-size:11px;margin:0 0 3px}.page.home .logo-wrap::before{top:-40px;bottom:-30px}}
+
+.page.home .card{overflow-x:clip}
+@media (max-height:600px){.page.home .tagline{display:none}}
+
+/* Účet: jen ikona vlevo nahoře (jako reproduktor), podrobnosti až po rozkliknutí */
+.nick-chip.acct{width:36px;height:36px;max-width:none;padding:0;border-radius:50%;justify-content:center;color:var(--ink-soft);background:transparent;border:1px dashed var(--dash)}
+.nick-chip.acct .dot{position:absolute;right:1px;bottom:1px;width:9px;height:9px;border:2px solid #0b0b10;box-sizing:content-box;margin:0}
+.nick-chip.acct.guest .dot{background:#9aa0a6;box-shadow:none}
+.acct-pop{position:absolute;top:56px;left:12px;z-index:5;width:min(250px,calc(100% - 24px));padding:12px 14px;border-radius:var(--r-md);background:#08080d;border:1px dashed var(--dash);box-shadow:0 10px 30px rgba(0,0,0,.6);animation:nickIn .16s ease both}
+.ap-label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.ap-name{font-size:18px;font-weight:700;margin:2px 0 6px;display:flex;align-items:center;gap:8px;word-break:break-word}
+.ap-badge{font-size:9px;letter-spacing:.12em;text-transform:uppercase;padding:2px 7px;border-radius:999px;border:1px dashed rgba(255,255,255,.3);color:var(--muted);font-weight:600}
+.ap-note{font-size:11.5px;line-height:1.45;color:var(--muted);margin-bottom:10px;text-transform:none;letter-spacing:0}
+.ap-btn{width:100%;padding:9px 12px;font-size:12px;letter-spacing:.06em;text-transform:none;border-radius:var(--r-md);background:rgba(255,59,48,.08);border:1px dashed var(--dash);color:var(--ink)}
+
+/* Denní bonus jako samostatný box + skryté zadání denní výzvy */
+.bonus-card{margin:12px 0 0;padding:10px 14px;border:1px dashed var(--dash);border-radius:4px;background:linear-gradient(180deg,rgba(255,59,48,.06),rgba(255,59,48,.02))}
+.bonus-card .bc-head{display:flex;justify-content:space-between;align-items:center;font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.bonus-card .bc-title{font-weight:700;color:#fff}
+.bonus-card .bc-tag{color:var(--muted);letter-spacing:.04em;text-transform:none}
+.bonus-card .bc-main{margin-top:6px;font-size:13px;color:#ffb4b0;letter-spacing:.04em;text-transform:uppercase;min-height:18px}
+.bonus-card .bc-main b{color:#fff}
+.bonus-card .bc-desc{margin-top:3px;font-size:11.5px;color:var(--muted);letter-spacing:.02em;min-height:14px}
+.bonus-card .bc-sub{margin-top:4px;font-size:10.5px;color:rgba(255,255,255,.45);letter-spacing:.02em}
+.dc-locked{display:flex;align-items:center;justify-content:center;gap:10px;margin:8px 0 2px;font-family:'Archivo Black','Space Grotesk',sans-serif;font-size:40px;letter-spacing:.1em;color:rgba(255,255,255,.28);line-height:1.1}
+.dc-locked .lk{font-size:20px;color:var(--accent);letter-spacing:0}
+.dc-note{text-align:center;font-size:11px;color:var(--muted);letter-spacing:.04em;margin-bottom:8px}
+.page.home .daily-card{margin-top:12px}
+.page.home .dc-locked{font-size:clamp(26px,5vh,40px)}
+@media (max-height:760px){.bonus-card .bc-sub{display:none}.bonus-card{margin-top:8px;padding:7px 12px}.dc-note{margin-bottom:4px}}
+@media (max-height:680px){.bonus-card .bc-desc{display:none}}
+@media (max-height:760px){.page.home .daily-card{margin-top:8px}}
+@media (max-height:700px){.dc-note{display:none}}
+
+.bonus-card .bc-desc,.bonus-card .bc-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:none}
+.bonus-card .bc-desc{font-size:11px}
+.bonus-card .bc-sub{font-size:10.5px}
+.dc-note{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:none}
+.bonus-card .bc-desc,.bonus-card .bc-sub{text-align:center}
