@@ -607,7 +607,7 @@ function loadMyStats() {
 // ---- Spodní panel pro pravidla / návod / nastavení ----
 function closeInfoSheet() {
   const m = document.getElementById('infoSheet');
-  if (m) { m.classList.add('out'); setTimeout(() => m.remove(), 180); }
+  if (m) { m.id = ''; m.classList.add('out'); setTimeout(() => m.remove(), 230); }
 }
 function showInfoSheet(title, html, onMount) {
   closeInfoSheet();

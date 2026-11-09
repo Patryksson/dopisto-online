@@ -32,7 +32,7 @@
     if (cache.loading || (cache.at && now - cache.at < 60000)) return;
     cache.loading = true;
     let pending = 3;
-    const done = () => { if (--pending === 0) { cache.loading = false; cache.at = Date.now(); schedule(); } };
+    const done = () => { if (--pending === 0) { cache.loading = false; cache.at = Date.now(); window.__menuDataReady = true; schedule(); } };
     socket.emit('get_daily_leaderboard', (r) => { cache.daily = Array.isArray(r) ? r.slice(0, 5) : []; done(); });
     socket.emit('get_leaderboard', { mode: 2 }, (r) => { cache.elo = Array.isArray(r) ? r.slice(0, 3) : []; done(); });
     socket.emit('get_daily_history', (r) => { cache.hist = Array.isArray(r) ? r : []; done(); });
@@ -57,8 +57,7 @@
       `<div class="row hist"><span class="hd">${esc(dayLabel(h.date))}</span><span class="hp">${esc(String(h.pattern || '').toUpperCase())}···</span><span class="nm">${h.top ? esc(h.top) : '<i class="dim">nikdo</i>'}</span><span class="v">${h.top ? h.count : ''}</span></div>`), 'Zatím žádná historie.')));
     setHtml(panel('keys'), `<h4>Klávesy</h4>
       <div class="row">${kbd('Enter')}<span class="nm">Hrát online</span></div>
-      <div class="row">${kbd('D')}<span class="nm">Denní výzva</span></div>
-      <div class="row">${kbd('Enter')}<span class="nm">v nabídce: najít soupeře</span></div>`);
+      <div class="row">${kbd('Backspace')}<span class="nm">zpět</span></div>`);
     return { left: ['dailyTop', 'eloTop'], right: ['dailyHist', 'keys'] };
   }
 
@@ -212,10 +211,19 @@
   // ----- klávesové zkratky -----
   document.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
-    if (document.querySelector('.nick-modal, .sheet-box, #acctPop, .report-modal')) return;
     const t = e.target;
     const tag = t && t.tagName;
     const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable);
+    // Okno s pravidly / nastavením zavře Esc i Backspace.
+    const sheet = document.getElementById('infoSheet');
+    if (sheet && !typing && (e.key === 'Escape' || e.key === 'Backspace')) { e.preventDefault(); closeInfoSheet(); return; }
+    if (document.querySelector('.nick-modal, .sheet-box, #acctPop, .report-modal')) return;
+    // Backspace = zpět (jen mimo hru a mimo psaní).
+    if (e.key === 'Backspace' && !typing && tag !== 'BUTTON' && tag !== 'A') {
+      const back = document.querySelector('#infoBackBtn, #playBackBtn, #backToMenuBtn, #dailyMenuBtn, #menuBtn, #brMenuBtn');
+      if (back && !document.getElementById('wordInput')) { e.preventDefault(); back.click(); }
+      return;
+    }
     if (e.key === 'Escape') {
       const wi = document.getElementById('wordInput');
       if (wi && t === wi && wi.value) { wi.value = ''; wi.dispatchEvent(new Event('input', { bubbles: true })); e.preventDefault(); }
@@ -224,9 +232,6 @@
     if (typing || tag === 'BUTTON' || tag === 'A') return;     // tlačítko si Enter/mezerník vyřídí samo
     if (e.key === 'Enter') {
       const b = document.getElementById('playBtn') || document.getElementById('findBtn');
-      if (b) { e.preventDefault(); b.click(); }
-    } else if (e.key === 'd' || e.key === 'D') {
-      const b = document.getElementById('dailyBtn');
       if (b) { e.preventDefault(); b.click(); }
     }
   });
