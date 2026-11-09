@@ -141,6 +141,19 @@ function vibrate(pattern) {
 
 let soundEnabled = localStorage.getItem('word_duel_sound') !== 'off';
 
+// Hlasitost (0–1) — uložená v prohlížeči; všechny zvuky jdou přes jeden hlavní regulátor.
+let soundVolume = 1;
+try { const v = parseFloat(localStorage.getItem('dopisto_volume')); if (isFinite(v)) soundVolume = Math.min(1, Math.max(0, v)); } catch {}
+function setSoundVolume(v) {
+  soundVolume = Math.min(1, Math.max(0, v));
+  try { localStorage.setItem('dopisto_volume', String(soundVolume)); } catch {}
+  if (audioCtx && audioCtx._master) audioCtx._master.gain.value = soundVolume;
+}
+function audioMaster(ctx) {
+  if (!ctx._master) { ctx._master = ctx.createGain(); ctx._master.gain.value = soundVolume; ctx._master.connect(ctx.destination); }
+  return ctx._master;
+}
+
 function ensureAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -156,7 +169,7 @@ function playTick() {
   osc.frequency.value = 1200;
   gain.gain.setValueAtTime(0.05, ctx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
-  osc.connect(gain).connect(ctx.destination);
+  osc.connect(gain).connect(audioMaster(ctx));
   osc.start();
   osc.stop(ctx.currentTime + 0.05);
 }
@@ -170,7 +183,7 @@ function playTickUrgent(freq) {
   osc.frequency.value = freq || 1700;
   gain.gain.setValueAtTime(0.11, ctx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
-  osc.connect(gain).connect(ctx.destination);
+  osc.connect(gain).connect(audioMaster(ctx));
   osc.start();
   osc.stop(ctx.currentTime + 0.09);
 }
@@ -185,7 +198,7 @@ function playPenalty() {
   osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.35);
   gain.gain.setValueAtTime(0.15, ctx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-  osc.connect(gain).connect(ctx.destination);
+  osc.connect(gain).connect(audioMaster(ctx));
   osc.start();
   osc.stop(ctx.currentTime + 0.35);
 }
@@ -204,7 +217,7 @@ function playVictory() {
     gain.gain.setValueAtTime(0.0001, start);
     gain.gain.exponentialRampToValueAtTime(0.18, start + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.28);
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(gain).connect(audioMaster(ctx));
     osc.start(start);
     osc.stop(start + 0.32);
   });
@@ -224,7 +237,7 @@ function playDefeat() {
     gain.gain.setValueAtTime(0.0001, start);
     gain.gain.exponentialRampToValueAtTime(0.12, start + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.32);
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(gain).connect(audioMaster(ctx));
     osc.start(start);
     osc.stop(start + 0.36);
   });
@@ -243,7 +256,7 @@ function playGo() {
     gain.gain.setValueAtTime(0.0001, start);
     gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.2);
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(gain).connect(audioMaster(ctx));
     osc.start(start);
     osc.stop(start + 0.22);
   });
@@ -275,7 +288,7 @@ function playSwoosh() {
   noiseGain.gain.exponentialRampToValueAtTime(0.38 * volumeMul, ctx.currentTime + 0.025);
   noiseGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
 
-  noise.connect(filter).connect(noiseGain).connect(ctx.destination);
+  noise.connect(filter).connect(noiseGain).connect(audioMaster(ctx));
   noise.start();
   noise.stop(ctx.currentTime + duration);
 
@@ -287,7 +300,7 @@ function playSwoosh() {
   thumpGain.gain.setValueAtTime(0.0001, ctx.currentTime);
   thumpGain.gain.exponentialRampToValueAtTime(0.22 * volumeMul, ctx.currentTime + 0.02);
   thumpGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
-  thump.connect(thumpGain).connect(ctx.destination);
+  thump.connect(thumpGain).connect(audioMaster(ctx));
   thump.start();
   thump.stop(ctx.currentTime + duration);
 }
@@ -303,7 +316,7 @@ function playClick() {
   osc.frequency.value = 700 * pitchMul;
   gain.gain.setValueAtTime(0.06, ctx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.035);
-  osc.connect(gain).connect(ctx.destination);
+  osc.connect(gain).connect(audioMaster(ctx));
   osc.start();
   osc.stop(ctx.currentTime + 0.035);
 }
@@ -502,6 +515,7 @@ function showNickModal(opts) {
     try { if (guest) localStorage.setItem('dopisto_guest', '1'); else localStorage.removeItem('dopisto_guest'); } catch {}
     closeNickModal();
     renderMenu();
+    if (pendingInvite) joinInvite();
   };
   const submit = () => {
     const n = input.value.trim();
@@ -661,10 +675,10 @@ function renderMenu(notice) {
       ${statsCardHtml()}
 
       <nav class="tabbar" aria-label="Menu">
-        <button type="button" class="tab" id="tabHow"><b>ⓘ</b><span>Jak to funguje</span></button>
-        <button type="button" class="tab" id="tabRules"><b>▤</b><span>Pravidla</span></button>
-        <button type="button" class="tab" id="tabBoard"><b>★</b><span>Žebříček</span></button>
-        <button type="button" class="tab" id="tabSettings"><b>⚙️</b><span>Nastavení</span></button>
+        <button type="button" class="tab" id="tabHow"><b><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><circle cx="12" cy="7.6" r=".6" fill="currentColor"/></svg></b><span>Jak to funguje</span></button>
+        <button type="button" class="tab" id="tabRules"><b><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 12h7M9 15.5h7M9 19h4"/></svg></b><span>Pravidla</span></button>
+        <button type="button" class="tab" id="tabBoard"><b><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.8l6-.8z"/></svg></b><span>Žebříček</span></button>
+        <button type="button" class="tab" id="tabSettings"><b><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg></b><span>Nastavení</span></button>
       </nav>
     </div>
 
@@ -1369,6 +1383,14 @@ function updateDailyClockUI() {
   if (t) t.textContent = fmtTime(dailyState.timeLeft);
 }
 
+// Skrytí zadání a slov při sdílení (pamatuje se v tomhle prohlížeči).
+function readDailyHide() { try { return localStorage.getItem('dopisto_hide_daily') === '1'; } catch { return false; } }
+function saveDailyHide(v) { try { localStorage.setItem('dopisto_hide_daily', v ? '1' : '0'); } catch {} }
+const SHARE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M7.5 7.5L12 3l4.5 4.5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+const LINK_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>';
+const EYE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.5 0 10.5 7 10.5 7a17 17 0 0 1-3.2 4M6.5 6.6A17.4 17.4 0 0 0 1.5 12S5.5 19 12 19c1.6 0 3-.3 4.3-.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+
 function renderDailyResult(data, fromCache) {
   const historyHtml = data.words.length ? data.words.map(w => `<div class="p0">${w}</div>`).join('')
     : '<div style="color:var(--muted)">Ani jedno slovo se dnes nepovedlo — zkus to zítra znovu!</div>';
@@ -1377,10 +1399,17 @@ function renderDailyResult(data, fromCache) {
     <div class="card result">
       <h2 class="win">🔥 Denní výzva hotová!</h2>
       <div style="color:var(--muted); font-size:13px">
-        Zadání: <b style="color:var(--accent)">${data.pattern.value.toUpperCase()}···</b>
+        Zadání: <b id="dailyPat" style="color:var(--accent)"></b>
         ${fromCache ? ' · dnes už jsi hrál(a)' : ''}
+        <button type="button" class="icon-btn hide-eye" id="hideDailyBtn"></button>
       </div>
-      <div style="font-family:'Archivo Black','Space Grotesk',sans-serif; font-size:64px; color:var(--accent); margin:14px 0 0; line-height:1;">${data.wordCount}</div>
+      <div class="res-count">
+        <div style="font-family:'Archivo Black','Space Grotesk',sans-serif; font-size:64px; color:var(--accent); margin:14px 0 0; line-height:1;">${data.wordCount}</div>
+        <div class="res-icons">
+          <button type="button" class="icon-btn res-ic" id="shareDailyBtn">${SHARE_SVG}</button>
+          <button type="button" class="icon-btn res-ic" id="copyDailyTxtBtn">${LINK_SVG}</button>
+        </div>
+      </div>
       <div style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:16px">SLOV ZA 180 SEKUND</div>
 
       <div id="dailyStats"></div>
@@ -1392,11 +1421,10 @@ function renderDailyResult(data, fromCache) {
 
       <div class="rules">
         <button type="button" class="rules-summary" data-panel="dailyhist"><span class="ic">▤</span><span>Tvoje slova (${data.words.length})</span><span class="chevron">›</span></button>
-        <div class="rules-panel" id="panel-dailyhist"><div class="rules-body feed word-history" style="max-height:220px">${historyHtml}</div></div>
+        <div class="rules-panel" id="panel-dailyhist"><div class="rules-body feed word-history" id="dailyWordsBody" style="max-height:220px"></div></div>
       </div>
 
       <div class="menu-list" style="margin-top:20px">
-        <button class="menu-item" id="shareDailyBtn" style="justify-content:center; text-align:center"><span class="ic">📤</span><span>Sdílet výsledek</span></button>
         <button class="secondary small" id="dailyMenuBtn" style="width:100%">Zpět do menu</button>
       </div>
     </div>
@@ -1411,17 +1439,43 @@ function renderDailyResult(data, fromCache) {
     };
   });
 
+  let hidden = readDailyHide();
+  const applyHide = () => {
+    document.getElementById('dailyPat').textContent = hidden ? '···' : data.pattern.value.toUpperCase() + '···';
+    const eb = document.getElementById('hideDailyBtn');
+    eb.innerHTML = hidden ? EYE_OFF_SVG : EYE_SVG;
+    eb.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+    eb.title = hidden ? 'Zadání je skryté — klepnutím ho ukážeš' : 'Skrýt zadání a slova (např. při sdílení)';
+    eb.setAttribute('aria-label', eb.title);
+    const body = document.getElementById('dailyWordsBody');
+    body.innerHTML = hidden ? '<div style="color:var(--muted)">Slova jsou skrytá.</div>' : historyHtml;
+    const panel = document.getElementById('panel-dailyhist');
+    if (panel.previousElementSibling.classList.contains('open')) panel.style.maxHeight = panel.scrollHeight + 'px';
+    const sb = document.getElementById('shareDailyBtn');
+    sb.title = hidden ? 'Sdílet obrázek bez zadání' : 'Sdílet obrázek s výsledkem';
+    sb.setAttribute('aria-label', sb.title);
+  };
+  document.getElementById('hideDailyBtn').onclick = () => { hidden = !hidden; saveDailyHide(hidden); applyHide(); };
+  applyHide();
   loadDailyStats(data.wordCount);
   loadDailyLeaderboard('dailyLbBody');
   // panel se rozbaluje podle výšky — po načtení žebříčku ji přepočítej
   setTimeout(() => { const p = document.getElementById('panel-dailylb'); if (p && p.previousElementSibling.classList.contains('open')) p.style.maxHeight = p.scrollHeight + 'px'; }, 500);
   document.getElementById('shareDailyBtn').onclick = () => shareDailyResult(data);
+  const cp = document.getElementById('copyDailyTxtBtn');
+  cp.title = 'Zkopírovat text s odkazem'; cp.setAttribute('aria-label', cp.title);
+  cp.onclick = () => {
+    const done = (ok) => { cp.classList.toggle('ok', ok); cp.innerHTML = ok ? '✓' : '!'; setTimeout(() => { cp.classList.remove('ok'); cp.innerHTML = LINK_SVG; }, 1600); };
+    if (navigator.clipboard) navigator.clipboard.writeText(dailyShareText(data)).then(() => done(true)).catch(() => done(false));
+    else done(false);
+  };
   document.getElementById('dailyMenuBtn').onclick = () => renderMenu();
 }
 
 // Vykreslí výsledek na plátno a nabídne sdílení (Web Share API na mobilu)
 // nebo stažení obrázku (na PC).
 function generateDailyShareImage(data) {
+  if (readDailyHide()) return generateDailyShareImageHidden(data);
   const MAX_WORDS = 90;          // víc slov se na obrázek nevejde rozumně
   const WORD_FONT = '15px Arial, sans-serif';
   const LINE_H = 24;
@@ -1489,6 +1543,27 @@ function generateDailyShareImage(data) {
   return canvas;
 }
 
+// Zmenšená verze: jen počet slov, bez zadání a bez seznamu slov (nikomu nic neprozradí).
+function generateDailyShareImageHidden(data) {
+  const H = 560;
+  const canvas = document.createElement('canvas');
+  canvas.width = 600; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, 600, H);
+  ctx.fillStyle = '#ff3131'; ctx.fillRect(0, 0, 600, 12);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff'; ctx.font = '700 42px Arial, sans-serif'; ctx.fillText('DOPIŠTO', 300, 110);
+  ctx.fillStyle = '#ff3131'; ctx.font = '700 20px Arial, sans-serif'; ctx.fillText('DENNÍ VÝZVA', 300, 142);
+  ctx.fillStyle = '#8890a6'; ctx.font = '16px Arial, sans-serif'; ctx.fillText(new Date().toLocaleDateString('cs-CZ'), 300, 170);
+  ctx.fillStyle = '#ff3131'; ctx.font = '700 150px Arial, sans-serif'; ctx.fillText(String(data.wordCount), 300, 330);
+  ctx.fillStyle = '#ffffff'; ctx.font = '700 22px Arial, sans-serif'; ctx.fillText('SLOV ZA 180 SEKUND', 300, 375);
+  const n = currentStreak();
+  if (n > 1) { ctx.fillStyle = '#c9ccd6'; ctx.font = '700 18px Arial, sans-serif'; ctx.fillText(`🔥 ${n} dní v řadě`, 300, 425); }
+  ctx.fillStyle = '#5a5a5a'; ctx.font = '13px Arial, sans-serif';
+  ctx.fillText((window.SITE && window.SITE.domain) || location.host || 'Dopišto', 300, H - 30);
+  return canvas;
+}
+
 // Rozdělí slova do řádků (oddělených „ · “) tak, aby se vešly do maxWidth.
 function layoutWordLines(ctx, words, maxWidth) {
   const lines = [];
@@ -1519,6 +1594,11 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
   if (line) ctx.fillText(line, x, curY);
 }
 
+function dailyShareText(data) {
+  const n = currentStreak();
+  const d = new Date().toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' });
+  return `Dopišto ${d}: ${data.wordCount} slov za 180 s${n > 1 ? ` · 🔥 ${n} dní v řadě` : ''}. Dokážeš víc? ${location.origin}`;
+}
 function shareDailyResult(data) {
   const canvas = generateDailyShareImage(data);
   canvas.toBlob((blob) => {
@@ -1528,7 +1608,7 @@ function shareDailyResult(data) {
       navigator.share({
         files: [file],
         title: 'Dopišto — Denní výzva',
-        text: `Zvládl(a) jsem ${data.wordCount} slov v Denní výzvě Dopišto!`,
+        text: dailyShareText(data),
       }).catch(() => {});
     } else {
       const url = URL.createObjectURL(blob);
@@ -1541,6 +1621,47 @@ function shareDailyResult(data) {
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     }
   }, 'image/png');
+}
+
+// ==== Pozvánka odkazem: …/?lobby=KÓD (Royale má navíc &br=1) ====
+let pendingInvite = null;
+function inviteUrl(code, isBr) {
+  return `${location.origin}/?lobby=${encodeURIComponent(code)}${isBr ? '&br=1' : ''}`;
+}
+function readInviteFromUrl() {
+  let code = '', isBr = false;
+  try {
+    const q = new URLSearchParams(location.search);
+    code = String(q.get('lobby') || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+    isBr = q.get('br') === '1';
+    if (q.has('lobby')) history.replaceState(null, '', location.pathname + location.hash);
+  } catch {}
+  if (code.length < 5) return;
+  pendingInvite = { code, isBr };
+  if (currentNick().length < 2) { { const m = document.getElementById('nickModal'); if (m) m.remove(); } showNickModal({ notice: 'Dostal(a) jsi pozvánku do hry — zvol si přezdívku.' }); return; }
+  joinInvite();
+}
+function joinInvite() {
+  const inv = pendingInvite; pendingInvite = null;
+  if (!inv) return;
+  const n = currentNick();
+  if (n.length < 2) return;
+  ensureAudioCtx();
+  if (inv.isBr) {
+    withBr(null, () => { brScreen = 'joining'; socket.emit('br_join_lobby', { nickname: n, code: inv.code }); renderBrWait('Připojuji se…'); });
+  } else {
+    socket.emit('join_lobby', { nickname: n, code: inv.code });
+    renderJoining();
+  }
+}
+// Sdílí odkaz (na telefonu systémovým oknem, jinde ho zkopíruje) a krátce potvrdí na tlačítku.
+function shareInvite(btn, code, isBr) {
+  const url = inviteUrl(code, isBr);
+  const text = isBr ? 'Pojď si zahrát Dopišto Royale!' : 'Pojď si se mnou zahrát Dopišto!';
+  const flash = (t) => { if (!btn) return; const o = btn.dataset.o || btn.textContent; btn.dataset.o = o; btn.textContent = t; setTimeout(() => { btn.textContent = o; }, 1600); };
+  const copy = () => { if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => flash('Odkaz zkopírován ✓')).catch(() => flash(url)); else flash(url); };
+  if (navigator.share && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) navigator.share({ title: 'Dopišto', text, url }).catch(() => {});
+  else copy();
 }
 
 // ==== Hledání soupeře (matchmaking) ====
@@ -1571,7 +1692,8 @@ function renderLobbyWaiting() {
       <div class="lobby-code" id="lobbyCodeNum">·····</div>
       <p style="color:var(--muted); font-size:11px">Pošli tento kód kamarádovi, ať ho zadá v „Připojit se kódem“.</p>
       <div class="row">
-        <button class="secondary small" id="copyCodeBtn">Zkopírovat kód</button>
+        <button class="secondary small" id="copyCodeBtn">Kód</button>
+        <button class="secondary small" id="copyLinkBtn">Odkaz</button>
         <button class="secondary small" id="cancelLobbyBtn">Zrušit</button>
       </div>
     </div>
@@ -1580,6 +1702,7 @@ function renderLobbyWaiting() {
     socket.emit('cancel_lobby');
     renderMenu();
   };
+  document.getElementById('copyLinkBtn').onclick = (e) => { if (currentLobbyCode) shareInvite(e.currentTarget, currentLobbyCode, false); };
   document.getElementById('copyCodeBtn').onclick = () => {
     if (currentLobbyCode && navigator.clipboard) {
       navigator.clipboard.writeText(currentLobbyCode).catch(() => {});
@@ -1608,6 +1731,7 @@ function renderRevealCountdown(data) {
     youAre: data.youAre,
     myName: loadNickname(),
     opponentName: data.opponent,
+    opponentStats: data.opponentStats || null,
     myElo: data.yourElo,
     opponentElo: data.opponentElo,
     token: data.token,
@@ -2690,6 +2814,7 @@ function hideOpponentDisconnectedBanner() {
 
 renderMenu();
 routeFromHash();
+readInviteFromUrl();
 
 // Zvukový klik na jakékoliv tlačítko nebo rozbalovací odkaz.
 document.addEventListener('click', (e) => {

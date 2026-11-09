@@ -1071,3 +1071,85 @@ body.has-vk .br-spectate{margin:0 0 4px}
 .bonus-card .bc-sub{font-size:10.5px}
 .dc-note{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:none}
 .bonus-card .bc-desc,.bonus-card .bc-sub{text-align:center}
+
+/* Logo nad zářící aurou (dřív záře překrývala logo a byl vidět čtverec) a plynulý přechod do ztracena */
+.page.home .logo{position:relative;z-index:1}
+.page.home .logo-wrap::before{background:radial-gradient(closest-side,rgba(255,59,48,.50),rgba(255,59,48,.20) 50%,rgba(255,59,48,0) 100%)}
+.tab b{display:flex;align-items:center;justify-content:center;height:24px;font-size:0;line-height:0}
+.tab b svg{display:block;width:22px;height:22px}
+
+/* ===== Počítač: postranní panely vedle karty (js: desktop.js) ===== */
+#sidePanels{position:fixed;inset:0;pointer-events:none;z-index:3}
+.side{position:fixed;width:270px;padding:14px 16px;border:1px dashed var(--dash);border-radius:4px;background:rgba(8,8,13,.86);box-shadow:0 0 24px rgba(255,59,48,.08);pointer-events:auto;font-size:12px;letter-spacing:.03em;text-transform:none}
+.side[hidden]{display:none}
+.side h4{margin:0 0 8px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.side h4 small{font-weight:400;color:var(--muted);letter-spacing:.04em;text-transform:none}
+.side .row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px dashed rgba(255,255,255,.14);color:var(--ink-soft);min-width:0}
+.side h4+.row{border-top:none}
+.side .rk,.side .kbd{flex:none}
+.side .rk{width:22px;height:22px;border-radius:50%;border:1px dashed rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted)}
+.side .rk.g{border:1px solid var(--dash);color:#fff;background:rgba(255,59,48,.18)}
+.side .nm{flex:1;min-width:0;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side .nm.dim{color:var(--muted)}
+.side .nm.big{font-size:16px;font-weight:700}
+.side .v{color:#ffb4b0;font-weight:700;flex:none}
+.side .dim{color:var(--muted)}
+.side .kbd{display:inline-block;min-width:22px;text-align:center;padding:1px 7px;border:1px solid rgba(255,255,255,.3);border-radius:4px;font-size:10px;color:#fff}
+.side .hint{margin-top:8px;font-size:10.5px;line-height:1.4;color:var(--muted)}
+.side .hist{gap:8px}
+.side .hist .hd{flex:none;width:62px;color:var(--muted);font-size:11px}
+.side .hist .hp{flex:none;width:46px;color:#fff;font-weight:700;letter-spacing:.06em}
+.side .hist .nm{font-size:12px}
+.side .hist .nm i{font-style:normal}
+
+/* Větší herní karta v duelu na velkém monitoru; historie slov je v levém panelu */
+body.desk-duel .page,body.desk-duel .card.game-card{max-width:760px}
+body.desk-duel .card.game-card{padding-left:44px;padding-right:44px}
+body.desk-duel .game-card .letter-tile{width:74px;height:74px;font-size:40px;border-radius:10px}
+body.desk-duel .game-card .clock{padding:18px}
+body.desk-duel .game-card .clock .time{font-size:56px}
+body.desk-duel .game-card .clock .name{font-size:13px}
+body.desk-duel .game-card .turn-status{padding:14px;font-size:15px}
+body.desk-duel .game-card .wi-field input,body.desk-duel #wordInput{font-size:22px;padding:18px 20px}
+body.desk-duel .game-card .daily-bonus-chip{font-size:13px;padding:8px 14px}
+body.desk-duel .game-card .reaction-btn{font-size:20px;padding:8px 12px}
+body.desk-duel .game-card .feed{display:none}
+
+/* Hover a fokus (hover jen tam, kde je myš; fokus vždy viditelný pro klávesnici) */
+:where(button,a,input,select,[role=radio],[tabindex]):focus-visible{outline:2px solid rgba(255,255,255,.9);outline-offset:3px;border-radius:inherit}
+#wordInput:focus-visible,.wi-field input:focus-visible{outline-offset:1px}
+@media (hover:hover) and (pointer:fine){
+  button,.tab,.seg-btn,.time-chip,.reaction-btn,.nick-chip,.link-btn,[role=radio]{cursor:pointer}
+  .menu-item:not(#playBtn):not(#dailyBtn):not(#findBtn):hover{border-color:var(--dash);background:rgba(255,59,48,.10);transform:translateY(-1px)}
+  #playBtn:hover,#dailyBtn:hover,#findBtn:hover{filter:brightness(1.1);transform:translateY(-1px)}
+  .tab:hover{color:#fff;background:rgba(255,255,255,.05)}
+  .tab:hover b{color:var(--accent)}
+  .seg-btn:not(.active):hover{color:#fff;background:rgba(255,255,255,.06)}
+  .time-chip:not(.on):hover{border-color:var(--dash);color:#fff}
+  .reaction-btn:hover{border-color:var(--dash);background:rgba(255,59,48,.12);transform:translateY(-1px)}
+  .nick-chip.acct:hover,.icon-btn:hover{border-style:solid;color:#fff;background:rgba(255,59,48,.10)}
+  .link-btn:hover{color:#fff;text-decoration:underline}
+  .ap-btn:hover{background:rgba(255,59,48,.18);color:#fff}
+  .menu-item,.tab,.reaction-btn,.time-chip{transition:transform .12s ease,background-color .15s,border-color .15s,color .15s,filter .15s}
+}
+@media (prefers-reduced-motion:reduce){.menu-item,.tab,.reaction-btn,.time-chip{transition:none}.menu-item:hover,.reaction-btn:hover{transform:none}}
+
+/* Skrytí zadání na výsledku denní výzvy */
+.hide-eye{width:30px;height:30px;min-width:30px;padding:0;margin-left:8px;vertical-align:middle;display:inline-flex;align-items:center;justify-content:center;position:static;color:var(--muted)}
+.hide-eye[aria-pressed="true"]{color:var(--accent)}
+
+/* Malé ikony sdílení vpravo vedle počtu slov */
+.res-count{position:relative}
+.res-icons{position:absolute;right:0;top:50%;transform:translateY(-35%);display:flex;flex-direction:column;gap:8px}
+.res-ic{position:static;width:34px;height:34px;min-width:34px;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);font-size:15px}
+.res-ic.ok{color:#2fd37a;border-style:solid}
+
+/* Posuvník hlasitosti vedle reproduktoru (jen počítač s myší) */
+.vol-pop{position:absolute;top:12px;right:50px;height:36px;display:flex;align-items:center;padding:0 12px 0 14px;border:1px dashed var(--dash);border-radius:18px;background:rgba(10,10,12,.92);opacity:0;pointer-events:none;transform:translateX(6px);transition:opacity .15s,transform .15s;z-index:3}
+.vol-pop[hidden]{display:none}
+.sound-toggle:hover + .vol-pop,.sound-toggle:focus-visible + .vol-pop,.vol-pop:hover,.vol-pop:focus-within{opacity:1;pointer-events:auto;transform:none}
+.vol-pop::before{content:"";position:absolute;right:-10px;top:0;width:12px;height:100%}
+.vol-pop input[type=range]{-webkit-appearance:none;appearance:none;width:110px;height:4px;border-radius:2px;background:linear-gradient(to right,var(--accent) var(--v,100%),rgba(255,255,255,.18) var(--v,100%));outline:none;cursor:pointer}
+.vol-pop input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid var(--accent)}
+.vol-pop input[type=range]::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--accent)}
+.vol-pop input[type=range]{padding:0;margin:0;border:0;min-height:0;box-shadow:none;flex:none;height:4px;width:110px;border-radius:2px}

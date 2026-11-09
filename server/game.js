@@ -383,6 +383,11 @@ function setupGame(io, socket) {
   socket.on('get_daily_info', (cb) => {
     if (typeof cb === 'function') cb({ bonus: publicBonus(dailyBonusForDate()) });
   });
+  // Poslední dokončené denní výzvy: zadání + kdo měl nejvíc slov. Dnešek se neposílá.
+  socket.on('get_daily_history', (cb) => {
+    if (typeof cb !== 'function') return;
+    cb(store.dailyHistory(7).map(({ _d, ...h }) => ({ ...h, pattern: dailyPattern(_d).value })));
+  });
   socket.on('get_daily_bonus', (cb) => { if (typeof cb === 'function') cb(publicBonus(dailyBonusForDate())); });
 
   socket.on('start_daily_challenge', (payload) => {
@@ -675,13 +680,19 @@ function startMatch(io, a, b, mode, firstNickname, forcedPattern) {
     turnTimer: room.turnTimer, countdownMs: REVEAL_COUNTDOWN_MS, requiredLetter: null,
     dailyBonus: publicBonus(room.dailyBonus),
   };
+  // Statistiky soupeře pro postranní panel (hosté je nemají).
+  const statsOf = (p) => {
+    if (store.isGuestName(p.nickname)) return null;
+    const s = store.playerStats(p.nickname);
+    return { games: s.games, wins: s.wins };
+  };
   a.socket.emit('match_found', {
     ...basePayload, opponent: b.nickname, youAre: 0,
-    yourElo: a.elo, opponentElo: b.elo, token: room.players[0].token,
+    yourElo: a.elo, opponentElo: b.elo, opponentStats: statsOf(b), token: room.players[0].token,
   });
   b.socket.emit('match_found', {
     ...basePayload, opponent: a.nickname, youAre: 1,
-    yourElo: b.elo, opponentElo: a.elo, token: room.players[1].token,
+    yourElo: b.elo, opponentElo: a.elo, opponentStats: statsOf(a), token: room.players[1].token,
   });
 
   setTimeout(() => beginRoom(io, room), REVEAL_COUNTDOWN_MS);

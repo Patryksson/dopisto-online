@@ -5,7 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const DIR = path.join(__dirname, '..', 'client');
-const HASHED = ['styles.css', 'fx.js', 'app.js', 'br.js'];
+const HASHED = ['styles.css', 'fx.js', 'app.js', 'desktop.js', 'br.js'];
 
 let esbuild = null;
 if (!process.env.NO_MINIFY) { try { esbuild = require('esbuild'); } catch { /* bez minifikace */ } }

@@ -66,7 +66,7 @@ const LIMITS = {
   submit_word: [12, 5000], submit_daily_word: [12, 5000],
   start_daily_challenge: [4, 10000], end_daily_challenge: [4, 10000],
   send_reaction: [8, 5000], get_leaderboard: [10, 10000], get_daily_leaderboard: [10, 10000],
-  get_daily_bonus: [10, 10000], get_daily_info: [10, 10000], get_daily_stats: [6, 10000], get_my_stats: [6, 10000], get_online: [8, 10000], submit_report: [3, 60000], report_player: [4, 60000], rejoin_room: [6, 10000], br_find: [6, 10000], br_create_lobby: [6, 10000], br_join_lobby: [8, 10000], br_start_lobby: [4, 10000], br_submit_word: [12, 5000], br_pass: [4, 5000], br_reverse: [4, 5000], br_leave: [4, 10000], br_rejoin: [6, 10000], br_rematch: [4, 10000], br_rematch_cancel: [6, 10000], give_up: [4, 10000],
+  get_daily_bonus: [10, 10000], get_daily_info: [10, 10000], get_daily_history: [6, 10000], get_daily_stats: [6, 10000], get_my_stats: [6, 10000], get_online: [8, 10000], submit_report: [3, 60000], report_player: [4, 60000], rejoin_room: [6, 10000], br_find: [6, 10000], br_create_lobby: [6, 10000], br_join_lobby: [8, 10000], br_start_lobby: [4, 10000], br_submit_word: [12, 5000], br_pass: [4, 5000], br_reverse: [4, 5000], br_leave: [4, 10000], br_rejoin: [6, 10000], br_rematch: [4, 10000], br_rematch_cancel: [6, 10000], give_up: [4, 10000],
   rematch_request: [4, 10000], rematch_accept: [4, 10000], rematch_decline: [4, 10000], result_left: [6, 10000],
 };
 const DEFAULT_LIMIT = [30, 10000];

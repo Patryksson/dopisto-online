@@ -68,7 +68,29 @@ function recordDaily(nickname, wordCount) {
   if (!today[k] || today[k].count < wordCount) today[k] = { name: nickname, count: wordCount };
   // uchovej jen posledních 7 dní
   Object.keys(daily).sort().slice(0, -7).forEach(d => delete daily[d]);
+  // Vítěz dne zůstane i po smazání detailů (pro přehled posledních výzev).
+  const top = Object.values(today).filter(e => !isGuestName(e.name)).sort((a, b) => b.count - a.count)[0];
+  const tops = db.dailyTop || (db.dailyTop = {});
+  tops[day] = top ? { name: top.name, count: top.count, players: Object.keys(today).length } : { name: null, count: 0, players: Object.keys(today).length };
+  Object.keys(tops).sort().slice(0, -14).forEach(d => delete tops[d]);
   save();
+}
+
+// Přehled posledních dokončených dnů (bez dneška — dnešní zadání se nesmí prozradit předem).
+function dailyHistory(n = 7) {
+  const out = [];
+  for (let i = 1; i <= n; i++) {
+    const d = new Date(Date.now() - i * 86400000);
+    const day = utcDateKey(d);
+    let t = db.dailyTop && db.dailyTop[day];
+    if (!t && db.daily && db.daily[day]) {
+      const m = db.daily[day];
+      const top = Object.values(m).filter(e => !isGuestName(e.name)).sort((a, b) => b.count - a.count)[0];
+      t = { name: top ? top.name : null, count: top ? top.count : 0, players: Object.keys(m).length };
+    }
+    out.push({ date: day, top: t ? t.name : null, count: t ? t.count : 0, players: t ? t.players : 0, _d: d });
+  }
+  return out;
 }
 
 function dailyLeaderboard(limit = 20) {
@@ -147,4 +169,4 @@ function playerStats(nickname) {
   return { games: wins + losses + br.games, wins: wins + br.wins, losses: losses + (br.games - br.wins), brWins: br.wins, brGames: br.games };
 }
 
-module.exports = { recordBr, playerStats, addReport, getProfile, recordResult, leaderboard, recordDaily, dailyLeaderboard, dailyStats };
+module.exports = { recordBr, playerStats, addReport, getProfile, recordResult, leaderboard, recordDaily, dailyLeaderboard, dailyStats, dailyHistory, isGuestName };

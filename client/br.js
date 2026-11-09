@@ -72,12 +72,14 @@ function renderBrLobby(d) {
         ? `<button id="brStartBtn" ${d.players.length < d.min ? 'disabled' : ''} style="width:100%; margin-top:12px">${d.players.length < d.min ? `Čekám na hráče (min. ${d.min})` : `Spustit hru (${d.players.length})`}</button>`
         : '<p style="color:var(--ink-soft); font-size:13px">Čekám, až hostitel spustí hru…</p>'}
       <div class="row" style="margin-top:10px">
-        <button class="secondary small" id="brCopyBtn">Zkopírovat kód</button>
+        <button class="secondary small" id="brCopyBtn">Kód</button>
+        <button class="secondary small" id="brLinkBtn">Odkaz</button>
         <button class="secondary small" id="brCancelBtn">Opustit</button>
       </div>
     </div>`;
   document.getElementById('brCancelBtn').onclick = () => { socket.emit('br_leave_lobby'); renderBrMenu(); };
   document.getElementById('brCopyBtn').onclick = () => { if (navigator.clipboard) navigator.clipboard.writeText(d.code).catch(() => {}); };
+  document.getElementById('brLinkBtn').onclick = (e) => shareInvite(e.currentTarget, d.code, true);
   const sb = document.getElementById('brStartBtn');
   if (sb) sb.onclick = () => socket.emit('br_start_lobby');
 }
@@ -660,12 +662,28 @@ socket.on('br_state', (st) => {
   const ev = st.event;
   if (ev && ev.type === 'timeout') br.breakReason = brReasonText(ev, st);
   br.st = st; br.stAt = Date.now();
+  brLogPush(ev, st);
   if (prev && st.players.some((p, i) => i !== br.youAre && prev.players[i] && prev.players[i].connected && !p.connected && p.alive)) vibrate([30, 50, 30]);
   brSetBase(st);
   if (brScreen !== 'game') return;
   brRender();
   brHandleEvent(ev, prev && prev.players);
 });
+
+// Záznam událostí hry (zobrazuje ho panel vedle karty na počítači).
+function brLogPush(ev, st) {
+  if (!ev || !br) return;
+  const n = (i) => (st.players[i] ? st.players[i].name : '?');
+  let t = null;
+  if (ev.type === 'word') t = `${n(ev.seat)}: ${ev.word}${ev.bonusHit ? ' ★' : ''}${ev.heart ? ' ' + BR_HEART : ''}`;
+  else if (ev.type === 'timeout') t = ev.eliminated ? `💀 ${n(ev.seat)} vypadl(a)` : ev.saved ? `${BR_HEART} bonus zachránil: ${n(ev.seat)}` : `💥 ${n(ev.seat)} nestihl(a), −${BR_HEART}`;
+  else if (ev.type === 'pass') t = `⏭ ${n(ev.seat)} přeskočil(a)`;
+  else if (ev.type === 'reverse') t = `⇄ ${n(ev.seat)} obrátil(a) směr`;
+  else if (ev.type === 'left') t = `🚪 ${n(ev.seat)} odešel(a)`;
+  if (!t) return;
+  (br.log = br.log || []).push({ r: st.round, seat: ev.seat, t });
+  if (br.log.length > 60) br.log.shift();
+}
 
 let brLastTickSec = null;
 socket.on('br_tick', (t) => {
