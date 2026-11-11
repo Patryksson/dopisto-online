@@ -1119,7 +1119,7 @@ body.desk-duel .game-card .feed{display:none}
 #wordInput:focus-visible,.wi-field input:focus-visible{outline-offset:1px}
 @media (hover:hover) and (pointer:fine){
   button,.tab,.seg-btn,.time-chip,.reaction-btn,.nick-chip,.link-btn,[role=radio]{cursor:pointer}
-  .menu-item:not(#playBtn):not(#dailyBtn):not(#findBtn):hover{border-color:var(--dash);background:rgba(255,59,48,.10);transform:translateY(-1px)}
+  .menu-item:not(#playBtn):not(#dailyBtn):not(#findBtn):not(#weeklyBtn):hover{border-color:var(--dash);background:rgba(255,59,48,.10);transform:translateY(-1px)}
   #playBtn:hover,#dailyBtn:hover,#findBtn:hover{filter:brightness(1.1);transform:translateY(-1px)}
   .tab:hover{color:#fff;background:rgba(255,255,255,.05)}
   .tab:hover b{color:var(--accent)}
@@ -1268,3 +1268,24 @@ body.desk-duel .game-card .feed{display:none}
 .side .bignum{font-size:84px;line-height:1;font-weight:700;color:#fff;text-align:center;padding:14px 0 4px;font-variant-numeric:tabular-nums;text-shadow:0 0 24px rgba(255,59,48,.45)}
 .side .bignum+.hint{text-align:center;margin-top:0}
 .vol-pop[hidden]{display:none}
+
+/* Návrat do menu: jen měkký fade, žádný posun (stránka neskáče) */
+@keyframes homeFade{from{opacity:0}to{opacity:1}}
+#app > .page.home{animation:homeFade .28s ease-out both}
+@media (prefers-reduced-motion:reduce){#app > .page.home{animation:none}}
+/* Mobil: kompaktnější prvky pod logem → logo má víc vzduchu nad i pod sebou, stránka se neposouvá */
+@media (max-width:600px){
+  .page.home .logo-wrap{margin-top:clamp(6px,1.6vh,16px);margin-bottom:clamp(6px,1.6vh,16px)}
+  .page.home .stats-card{margin:8px 0 4px;padding:6px 12px 7px}
+  .page.home .sc-title{margin-bottom:3px}
+  .page.home .sc-row b{font-size:16px}
+  .page.home .bonus-card.slim{margin-top:6px;padding:5px 12px}
+  .page.home .chal-row .chal-sq{padding:7px 8px 6px}
+  .page.home .chal-sq .cs-pat{margin:2px 0;font-size:clamp(22px,3.8vh,32px)}
+  .page.home .chal-sq .cs-note{margin-bottom:4px}
+  .page.home .chal-row .chal-sq .menu-item{padding-top:8px;padding-bottom:8px}
+  .page.home .tab{padding-top:5px;padding-bottom:2px}
+  .page.home .tab b{height:20px}
+  .page.home .tab b svg{width:19px;height:19px}
+  .page.home .site-footer{font-size:10px}
+}
