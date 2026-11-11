@@ -1,9 +1,10 @@
 const crypto = require('crypto');
 const { customPattern, isValidWord, generatePattern, matchesPattern, patternInstruction, acceptableStartLetters, matchesRequiredLetter, dailyPattern } = require('./dictionary');
 const store = require('./store');
-const { sanitizeNickname, cleanWord, attachSocketGuard } = require('./security');
+const { sanitizeNickname, cleanWord, attachSocketGuard, ipAllow } = require('./security');
 const { dailyBonusForDate, checkDailyBonus, publicBonus, DAILY_BONUS_EXTRA_MS } = require('./dailyBonus');
 const { setupBR, startBRLoop } = require('./br');
+const { setupWeekly } = require('./weekly');
 
 const MODES = [2, 'middle', 'speed'];
 const BANK_TIME_BY_MODE = { 2: 90000, middle: 90000, speed: 60000 };
@@ -144,6 +145,7 @@ function setupGame(io, socket) {
   socket.data.lobbyCode = null;
   attachSocketGuard(socket);
   setupBR(io, socket);
+  setupWeekly(socket);
 
   // Vyčistí přezdívku; při zamítnutí pošle klientovi důvod a vrátí null.
   function acceptNickname(raw) {
@@ -325,6 +327,7 @@ function setupGame(io, socket) {
     const idx = g.players.findIndex(p => p.id === socket.id);
     if (idx === -1) return reply({ ok: false, message: 'Nahlásit můžeš jen soupeře z vlastního zápasu.' });
     if (g.reportedBy.has(idx)) return reply({ ok: false, message: 'Tohoto soupeře jsi už nahlásil(a).' });
+    if (!ipAllow(socket.data.ip || socket.handshake.address, 'report_player', 10, 3600000)) return reply({ ok: false, message: 'Už jsi poslal(a) hodně hlášení. Zkus to později.' });
     const reasons = { cheating: 'Podezření na cheating', nick: 'Nevhodná přezdívka', behavior: 'Chování', other: 'Jiný důvod' };
     const reason = typeof payload.reason === 'string' && reasons[payload.reason] ? payload.reason : null;
     if (!reason) return reply({ ok: false, message: 'Vyber důvod.' });
@@ -360,6 +363,8 @@ function setupGame(io, socket) {
   socket.on('submit_report', (payload, cb) => {
     const reply = (res) => { if (typeof cb === 'function') cb(res); };
     if (!payload || typeof payload !== 'object') return reply({ ok: false });
+    // Víc spojení z jedné IP nesmí zaplavit hlášení (soubor drží jen posledních 500 záznamů).
+    if (!ipAllow(socket.data.ip || socket.handshake.address, 'report', 5, 3600000)) return reply({ ok: false, message: 'Už jsi poslal(a) hodně hlášení. Zkus to později.' });
     const types = ['bug', 'word', 'player', 'idea'];
     const text = typeof payload.text === 'string' ? payload.text.trim().slice(0, 1000) : '';
     if (text.length < 5) return reply({ ok: false, message: 'Napiš prosím aspoň pár slov.' });

@@ -4,7 +4,8 @@
   "description": "Dopišto — online slovní duel pro 2 hráče",
   "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "test": "node --test --test-concurrency=1 \"tests/*.test.js\""
   },
   "keywords": [],
   "author": "",
@@ -16,5 +17,8 @@
   },
   "optionalDependencies": {
     "esbuild": "^0.28.2"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
   }
 }

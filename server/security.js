@@ -21,8 +21,22 @@ const RESERVED = ['admin', 'administrator', 'moderator', 'dopisto', 'system', 's
 
 const LEET = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '@': 'a', '$': 's', '!': 'i' };
 
+// Znaky, které vypadají jako latinka (azbuka, řečtina, malé kapitálky…) — převádíme je na latinku,
+// aby se jimi nedal obejít filtr ani zákaz jmen jako „admin".
+const CONFUSABLES = {
+  'а':'a','в':'b','е':'e','к':'k','м':'m','н':'h','о':'o','р':'p','с':'c','т':'t','у':'y','х':'x','і':'i','ј':'j','ѕ':'s','ԁ':'d','ӏ':'l','ү':'y','ғ':'f',
+  'α':'a','β':'b','ε':'e','ι':'i','κ':'k','ν':'v','ο':'o','ρ':'p','τ':'t','υ':'u','χ':'x','η':'n','μ':'u','γ':'y','ω':'w',
+  'ᴀ':'a','ʙ':'b','ᴄ':'c','ᴅ':'d','ᴇ':'e','ꜰ':'f','ɢ':'g','ʜ':'h','ɪ':'i','ᴊ':'j','ᴋ':'k','ʟ':'l','ᴍ':'m','ɴ':'n','ᴏ':'o','ᴘ':'p','ʀ':'r','ꜱ':'s','ᴛ':'t','ᴜ':'u','ᴠ':'v','ᴡ':'w','ʏ':'y','ᴢ':'z',
+  'ǀ':'l','ⅼ':'l','ⅰ':'i','ℓ':'l','ꓖ':'g','ꓰ':'e','ꓚ':'c','ꓑ':'p','ꓢ':'s','ꓔ':'t','ꓳ':'o',
+};
+function foldConfusables(s) {
+  let out = '';
+  for (const ch of s.toLowerCase()) out += CONFUSABLES[ch] || ch;
+  return out;
+}
+
 function normalizeForFilter(s) {
-  let t = s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  let t = foldConfusables(s).normalize('NFD').replace(/[̀-ͯ]/g, '');
   t = t.replace(/[01345 7@$!]/g, c => LEET[c] || '');
   return t.replace(/[^a-z]/g, '');
 }
@@ -59,11 +73,28 @@ function cleanWord(raw) {
   return raw.trim().toLowerCase().slice(0, 40);
 }
 
+// ---- Omezení na IP adresu (klouzavé okno) — proti zahlcení z více spojení najednou ----
+const ipBuckets = new Map();
+function ipAllow(ip, kind, max, windowMs) {
+  const k = kind + '|' + ip;
+  const now = Date.now();
+  const arr = (ipBuckets.get(k) || []).filter(t => now - t < windowMs);
+  if (arr.length >= max) { ipBuckets.set(k, arr); return false; }
+  arr.push(now);
+  ipBuckets.set(k, arr);
+  return true;
+}
+setInterval(() => {            // úklid starých záznamů
+  const now = Date.now();
+  for (const [k, arr] of ipBuckets) if (!arr.length || now - arr[arr.length - 1] > 3600000) ipBuckets.delete(k);
+}, 600000).unref();
+
 // ---- Rate limiting (po socketu, klouzavé okno) ----
 // [max událostí, okno v ms]
 const LIMITS = {
   find_match: [6, 10000], create_lobby: [6, 10000], join_lobby: [8, 10000],
   submit_word: [12, 5000], submit_daily_word: [12, 5000],
+  submit_weekly_word: [12, 5000], open_weekly: [6, 10000], weekly_me: [6, 10000], get_weekly_leaderboard: [6, 10000],
   start_daily_challenge: [4, 10000], end_daily_challenge: [4, 10000],
   send_reaction: [8, 5000], get_leaderboard: [10, 10000], get_daily_leaderboard: [10, 10000],
   get_daily_bonus: [10, 10000], get_daily_info: [10, 10000], get_daily_history: [6, 10000], get_daily_stats: [6, 10000], get_my_stats: [6, 10000], get_online: [8, 10000], submit_report: [3, 60000], report_player: [4, 60000], rejoin_room: [6, 10000], br_find: [6, 10000], br_create_lobby: [6, 10000], br_join_lobby: [8, 10000], br_start_lobby: [4, 10000], br_submit_word: [12, 5000], br_pass: [4, 5000], br_reverse: [4, 5000], br_leave: [4, 10000], br_rejoin: [6, 10000], br_rematch: [4, 10000], br_rematch_cancel: [6, 10000], give_up: [4, 10000],
@@ -75,7 +106,7 @@ const MAX_STRIKES = 8;
 // Události, jejichž handler čeká objekt jako první argument.
 const NEEDS_OBJECT = new Set([
   'find_match', 'create_lobby', 'join_lobby', 'submit_word', 'give_up', 'send_reaction',
-  'get_leaderboard', 'submit_daily_word', 'rejoin_room', 'rematch_request', 'rematch_accept', 'rematch_decline', 'result_left', 'report_player', 'get_daily_stats', 'get_my_stats',
+  'get_leaderboard', 'submit_daily_word', 'submit_weekly_word', 'open_weekly', 'weekly_me', 'rejoin_room', 'rematch_request', 'rematch_accept', 'rematch_decline', 'result_left', 'report_player', 'get_daily_stats', 'get_my_stats',
   'br_find', 'br_create_lobby', 'br_join_lobby', 'br_submit_word', 'br_pass', 'br_reverse', 'br_leave', 'br_rejoin', 'br_rematch', 'br_rematch_cancel',
 ]);
 
@@ -109,10 +140,25 @@ function attachSocketGuard(socket) {
 const MAX_CONN_PER_IP = Number(process.env.MAX_CONN_PER_IP) || 10;
 const connCount = new Map();
 
+// IP klienta. Hlavičku X-Forwarded-For si může poslat kdokoli, proto:
+//  - věříme jí jen tehdy, když spojení přišlo z proxy (loopback / soukromá adresa),
+//  - bereme záznam, který přidala NAŠE proxy (zprava; počet proxy v TRUST_PROXY_HOPS, výchozí 1),
+//    ne první hodnotu zleva, kterou si klient vymyslí.
+// TRUST_PROXY=0 vypne důvěru v hlavičku úplně.
+const PROXY_HOPS = Math.max(1, Number(process.env.TRUST_PROXY_HOPS) || 1);
+function isPrivateAddr(a) {
+  a = String(a || '').replace(/^::ffff:/, '');
+  return a === '::1' || a === '127.0.0.1' || /^10\./.test(a) || /^192\.168\./.test(a) || /^172\.(1[6-9]|2\d|3[01])\./.test(a) || /^f[cd][0-9a-f]{2}:/i.test(a) || /^fe80:/i.test(a) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(a);
+}
 function clientIp(socket) {
+  const direct = socket.handshake.address;
   const xff = socket.handshake.headers['x-forwarded-for'];
-  if (process.env.TRUST_PROXY !== '0' && typeof xff === 'string' && xff) return xff.split(',')[0].trim();
-  return socket.handshake.address;
+  if (process.env.TRUST_PROXY !== '0' && typeof xff === 'string' && xff && isPrivateAddr(direct)) {
+    const parts = xff.split(',').map(x => x.trim()).filter(Boolean);
+    const ip = parts[parts.length - PROXY_HOPS];
+    if (ip && ip.length <= 45 && /^[0-9a-fA-F:.]+$/.test(ip)) return ip;
+  }
+  return direct;
 }
 
 function attachConnectionLimit(io) {
@@ -139,5 +185,5 @@ function securityHeaders(req, res, next) {
 }
 
 module.exports = {
-  sanitizeNickname, cleanWord, attachSocketGuard, attachConnectionLimit, securityHeaders, isProfane,
+  clientIp, ipAllow, sanitizeNickname, cleanWord, attachSocketGuard, attachConnectionLimit, securityHeaders, isProfane,
 };

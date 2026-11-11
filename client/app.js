@@ -101,6 +101,11 @@ function positionModeIndicator(animate) {
 // data (např. znovunačtení žebříčku).
 function bindModeSegmented(getMode, onModeChange) {
   positionModeIndicator(false);
+  if (!window._segResizeBound) {
+    window._segResizeBound = true;
+    window.addEventListener('resize', () => positionModeIndicator(false));
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => positionModeIndicator(false));
+  }
   document.querySelectorAll('.seg-btn').forEach(btn => {
     btn.onclick = () => {
       const m = btn.dataset.mode;
@@ -149,6 +154,7 @@ function setSoundVolume(v) {
   try { localStorage.setItem('dopisto_volume', String(soundVolume)); } catch {}
   if (audioCtx && audioCtx._master) audioCtx._master.gain.value = soundVolume;
 }
+if (soundVolume === 0) soundEnabled = false;   // hlasitost 0 = zvuk vypnutý
 function audioMaster(ctx) {
   if (!ctx._master) { ctx._master = ctx.createGain(); ctx._master.gain.value = soundVolume; ctx._master.connect(ctx.destination); }
   return ctx._master;
@@ -329,11 +335,17 @@ function soundIconHtml() {
   return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${base}${soundEnabled ? on : off}</svg>`;
 }
 
-function toggleSound() {
-  soundEnabled = !soundEnabled;
-  localStorage.setItem('word_duel_sound', soundEnabled ? 'on' : 'off');
+function setSoundEnabled(on) {
+  soundEnabled = !!on;
+  try { localStorage.setItem('word_duel_sound', soundEnabled ? 'on' : 'off'); } catch {}
   const btn = document.getElementById('soundBtn');
   if (btn) { btn.innerHTML = soundIconHtml(); btn.title = soundEnabled ? 'Zvuk zapnutý' : 'Zvuk vypnutý'; }
+  window.dispatchEvent(new Event('dopisto-sound'));
+}
+function toggleSound() {
+  setSoundEnabled(!soundEnabled);
+  // Zapnutí ztlumeného reproduktoru (posuvník dole) vrátí hlasitost naplno.
+  if (soundEnabled && soundVolume === 0) { setSoundVolume(1); window.dispatchEvent(new Event('dopisto-sound')); }
 }
 
 // ==== Texty pravidel (normální psaní, ne jen tiskací — viz CSS override) ====
@@ -360,6 +372,13 @@ const RULES_HTML = `
     <li><b>👑 Royale (Battle Royale)</b> — až 5 hráčů v kruhu, vyhrává poslední
       přeživší. Pravidla jsou na konci tohoto přehledu.</li>
   </ol>
+
+  <p><b>🏆 Týdenní výzva</b> — jedno zadání na celý týden (pondělí až neděle).
+  Otevřeš ji kdy chceš, můžeš se vracet a slova se ti sčítají. Bez časového
+  limitu a bez trestů — cílem je za týden najít co nejvíc slov. Zadání se
+  každý týden mění (začátek slova, dvojice uprostřed, začátek a konec, zakázané
+  písmeno…) a je záměrně snazší než u denní výzvy. Pořadí se počítá podle
+  počtu slov.</p>
 
   <p>Každý z režimů 1 písmeno, 2 písmena a Uprostřed má vlastní, oddělený
   žebříček ELO. Battle Royale se do ELO nepočítá.</p>
@@ -548,6 +567,11 @@ function msUntilUtcMidnight() {
   const d = new Date();
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - d.getTime();
 }
+function fmtWeekLeft(ms) {
+  const m = Math.max(0, Math.floor(ms / 60000));
+  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60);
+  return d >= 1 ? `${d} d ${h} h` : `${h} h ${String(m % 60).padStart(2, '0')} min`;
+}
 function fmtCountdown(ms) {
   const m = Math.floor(ms / 60000);
   return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
@@ -555,8 +579,10 @@ function fmtCountdown(ms) {
 
 let menuTimer = null;
 
+const MOBILE_ONLY_PREFS = ['vibrate', 'vkeyboard'];
 function settingsHtml() {
-  return Object.keys(SOUND_PREFS_INFO).map(k => {
+  const pc = window.matchMedia('(hover:hover) and (pointer:fine)').matches;
+  return Object.keys(SOUND_PREFS_INFO).filter(k => !(pc && MOBILE_ONLY_PREFS.includes(k))).map(k => {
     const i = SOUND_PREFS_INFO[k];
     return `
     <label class="setting-row">
@@ -564,7 +590,7 @@ function settingsHtml() {
       <span class="setting-text"><b>${i.label}</b><small>${i.desc}</small></span>
       <input type="checkbox" class="switch" data-pref="${k}" ${(k === 'prefill' ? soundPrefs[k] === true : soundPrefs[k] !== false) ? 'checked' : ''} />
     </label>`;
-  }).join('') + '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře. „Vlastní klávesnice“ a „Předvyplnit zadání“ se projeví od příští hry.</div>';
+  }).join('') + (pc ? '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře (nebo posuvník hlasitosti úplně dolů). „Předvyplnit zadání“ se projeví od příští hry.</div>' : '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře. „Vlastní klávesnice“ a „Předvyplnit zadání“ se projeví od příští hry.</div>');
 }
 
 // ---- Statistiky hráče (pod denní výzvou) ----
@@ -656,21 +682,30 @@ function renderMenu(notice) {
         <button class="menu-item" id="playBtn"><span class="ic">⚔</span><span>Hrát online</span></button>
       </div>
 
-      <div class="bonus-card" id="bonusCard">
-        <div class="bc-head"><span class="bc-title">✦ Denní bonus</span><span class="bc-tag">platí pouze dnes</span></div>
-        <div class="bc-main" id="bcMain">···</div>
-        <div class="bc-desc" id="bcDesc"></div>
-        <div class="bc-sub" id="bcSub">+3 s v duelech i denní výzvě · v Royale plní metr srdce</div>
+      <div class="bonus-card slim" id="bonusCard">
+        <span class="bc-title">✦ Denní bonus</span>
+        <span class="bc-main" id="bcMain">···</span>
+        <button type="button" class="bc-info" id="bcInfo" aria-label="Podrobnosti bonusu">i</button>
       </div>
 
-      <div class="daily-card">
-        <div class="dc-head"><span class="dc-title">🔥 Denní výzva</span><span class="dc-timer" id="dcTimer"></span></div>
-        ${saved
-          ? `<div class="dc-pattern" id="dcPattern">${esc(((saved.pattern && saved.pattern.value) || '').toUpperCase())}···</div><div class="dc-note">Dnešní zadání · splněno ✓</div>`
-          : `<div class="dc-locked" id="dcPattern"><span class="lk">🔒</span><span>? ? · · ·</span></div><div class="dc-note">Zadání se odhalí až po spuštění — pro všechny stejné</div>`}
-        <div class="menu-list"><button class="menu-item" id="dailyBtn"><span>${saved ? `Zobrazit výsledek · ${saved.wordCount} slov` : 'Hrát výzvu'}</span></button></div>
-        ${streakHtml()}
+      <div class="chal-row">
+        <div class="daily-card chal-sq">
+          <div class="cs-title">🔥 Denní výzva</div>
+          <div class="cs-timer dc-timer" id="dcTimer"></div>
+          ${saved
+            ? `<div class="cs-pat" id="dcPattern">${esc(((saved.pattern && saved.pattern.value) || '').toUpperCase())}···</div><div class="cs-note dc-note">Splněno ✓ · ${saved.wordCount} slov</div>`
+            : `<div class="cs-pat locked" id="dcPattern"><span class="lk">🔒</span><span>? ?</span></div><div class="cs-note dc-note">Zadání pro všechny stejné</div>`}
+          <button class="menu-item cs-btn" id="dailyBtn"><span>${saved ? 'Výsledek' : 'Hrát'}</span></button>
+        </div>
+        <div class="weekly-card chal-sq">
+          <div class="cs-title">🏆 Týdenní výzva</div>
+          <div class="cs-timer" id="wkTimer"></div>
+          <div class="cs-pat locked" id="wkPattern"><span class="lk">🔒</span><span>? ?</span></div>
+          <div class="cs-note" id="wkNote">Bez časového limitu</div>
+          <button class="menu-item cs-btn" id="weeklyBtn"><span>Hrát</span></button>
+        </div>
       </div>
+      ${currentStreak() ? streakHtml() : ''}
 
       ${statsCardHtml()}
 
@@ -688,7 +723,6 @@ function renderMenu(notice) {
   `;
 
   document.getElementById('soundBtn').onclick = toggleSound;
-  fitOneLine(document.querySelector('.dc-note'), 11, 8.5);
   bindNicknameBinding();
   bindRulesPanels();
   if (!loadNickname()) showNickModal({ notice });
@@ -704,19 +738,31 @@ function renderMenu(notice) {
     renderPlayMenu();
   };
 
-  // Karta denní výzvy: dnešní zadání, bonus dne a odpočet do půlnoci (UTC).
-  const tick = () => { const t = document.getElementById('dcTimer'); if (t) t.textContent = 'zbývá ' + fmtCountdown(msUntilUtcMidnight()); };
+  // Karty výzev: odpočet do půlnoci (UTC), bonus dne a stav týdenní výzvy.
+  const tick = () => {
+    const t = document.getElementById('dcTimer'); if (t) t.textContent = 'zbývá ' + fmtCountdown(msUntilUtcMidnight());
+    const w = document.getElementById('wkTimer'); if (w && menuWeekEnd) w.textContent = 'zbývá ' + fmtWeekLeft(menuWeekEnd - Date.now());
+  };
+  let menuWeekEnd = 0;
   tick();
   menuTimer = setInterval(() => { tick(); loadOnline(); }, 30000);
+  loadWeeklyCard((end) => { menuWeekEnd = end; tick(); });
+  let bonusInfo = null;
   socket.emit('get_daily_info', (info) => {
     const main = document.getElementById('bcMain');
-    const desc = document.getElementById('bcDesc');
-    if (!info || !info.bonus || !main || !desc) return;
+    if (!info || !info.bonus || !main) return;
+    bonusInfo = info.bonus;
     main.innerHTML = `${esc(info.bonus.label)} · <b>+3 s</b>`;
-    desc.textContent = BONUS_SHORT[info.bonus.id] || info.bonus.desc;
-    fitOneLine(desc, 11, 8.5);
-    fitOneLine(document.getElementById('bcSub'), 10.5, 8.5);
   });
+  document.getElementById('bcInfo').onclick = () => {
+    if (!bonusInfo) return;
+    showInfoSheet('Denní bonus', `<div class="rules-body"><b>${esc(bonusInfo.label)} · +3 s</b><br>${esc(BONUS_SHORT[bonusInfo.id] || bonusInfo.desc)}<br><br>+3 s v duelech i denní výzvě · v Royale plní metr srdce. Platí pouze dnes.</div>`);
+  };
+  document.getElementById('weeklyBtn').onclick = () => {
+    if (!requireNick()) return;
+    ensureAudioCtx();
+    openWeekly();
+  };
 
   document.getElementById('dailyBtn').onclick = () => {
     if (!requireNick()) return;
@@ -792,7 +838,7 @@ try { const v = Number(localStorage.getItem('dopisto_br_turn')); if (BR_TURN_CHO
 function renderPlayMenu(notice) {
   clearInterval(menuTimer);
   app.innerHTML = `
-    <div class="page">
+    <div class="page play-full">
     <div class="card">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       <button type="button" class="back-link" id="playBackBtn">‹ Zpět</button>
@@ -1762,7 +1808,7 @@ function renderRevealCountdown(data) {
           <div class="vs-elo">${data.opponentElo} ELO</div>
         </div>
       </div>
-      <div class="turn-preview">Začíná: <span>${startingName}</span></div>
+      <div class="turn-preview">Začíná: <span>${esc(startingName)}</span></div>
       <div class="countdown-label">Zadání kola</div>
       ${patternDisplayBlock(data.pattern, 'reveal')}
       <div class="countdown-num" id="countNum">3</div>
@@ -2304,7 +2350,7 @@ function renderResult(data) {
   const history = data.history || [];
   const historyHtml = history.length ? history.map(h => {
     const name = h.playerIdx === game.youAre ? game.myName : game.opponentName;
-    return `<div class="p${h.playerIdx}">${name}: ${h.word}</div>`;
+    return `<div class="p${h.playerIdx}">${esc(name)}: ${esc(h.word)}</div>`;
   }).join('') : '<div style="color:var(--muted)">V tomto kole nepadlo žádné slovo.</div>';
 
   app.innerHTML = `

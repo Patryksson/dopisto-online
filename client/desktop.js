@@ -8,7 +8,7 @@
   root.id = 'sidePanels';
   document.body.appendChild(root);
 
-  const cache = { hist: null, daily: null, elo: null, at: 0, loading: false };
+  const cache = { hist: null, daily: null, weekly: null, elo: null, at: 0, loading: false };
   const panels = {};
   const kbd = (k) => `<span class="kbd">${k}</span>`;
 
@@ -31,9 +31,10 @@
     const now = Date.now();
     if (cache.loading || (cache.at && now - cache.at < 60000)) return;
     cache.loading = true;
-    let pending = 3;
+    let pending = 4;
     const done = () => { if (--pending === 0) { cache.loading = false; cache.at = Date.now(); window.__menuDataReady = true; schedule(); } };
     socket.emit('get_daily_leaderboard', (r) => { cache.daily = Array.isArray(r) ? r.slice(0, 5) : []; done(); });
+    socket.emit('get_weekly_leaderboard', (r) => { cache.weekly = r && Array.isArray(r.rows) ? r.rows.slice(0, 5) : []; done(); });
     socket.emit('get_leaderboard', { mode: 2 }, (r) => { cache.elo = Array.isArray(r) ? r.slice(0, 3) : []; done(); });
     socket.emit('get_daily_history', (r) => { cache.hist = Array.isArray(r) ? r : []; done(); });
     setTimeout(() => { if (cache.loading) { cache.loading = false; } }, 6000);
@@ -47,10 +48,13 @@
 
   function renderMenuPanels() {
     loadMenuData();
-    const daily = cache.daily, elo = cache.elo, hist = cache.hist;
+    const daily = cache.daily, weekly = cache.weekly, elo = cache.elo, hist = cache.hist;
     setHtml(panel('dailyTop'), `<h4>🏆 Žebříček dne <small>denní výzva</small></h4>` + (daily === null ? '<div class="row dim">···</div>' : rows(daily.map((e, i) =>
       `<div class="row"><span class="rk${i < 3 ? ' g' : ''}">${i + 1}</span><span class="nm">${esc(e.name)}</span><span class="v">${e.count}</span></div>`), 'Zatím nikdo nehrál.')) +
       `<div class="hint">Zadání se odhalí až po spuštění — pro všechny stejné.</div>`);
+    setHtml(panel('weeklyTop'), `<h4>🏆 Žebříček týdne <small>týdenní výzva</small></h4>` + (weekly === null ? '<div class="row dim">···</div>' : rows(weekly.map((e, i) =>
+      `<div class="row"><span class="rk${i < 3 ? ' g' : ''}">${i + 1}</span><span class="nm">${esc(e.name)}</span><span class="v">${e.count}</span></div>`), 'Zatím nikdo nehrál.')) +
+      `<div class="hint">Jedno zadání na celý týden, počítá se počet slov.</div>`);
     setHtml(panel('eloTop'), `<h4>⚔ Nejlepší hráči <small>2 písmena · ELO</small></h4>` + (elo === null ? '<div class="row dim">···</div>' : rows(elo.map((e, i) =>
       `<div class="row"><span class="rk g">${i + 1}</span><span class="nm">${esc(e.name)}</span><span class="v">${e.elo}</span></div>`), 'Zatím žádné zápasy.')));
     setHtml(panel('dailyHist'), `<h4>📅 Poslední výzvy <small>zadání · vítěz</small></h4>` + (hist === null ? '<div class="row dim">···</div>' : rows(hist.map(h =>
@@ -58,7 +62,7 @@
     setHtml(panel('keys'), `<h4>Klávesy</h4>
       <div class="row">${kbd('Enter')}<span class="nm">Hrát online</span></div>
       <div class="row">${kbd('Backspace')}<span class="nm">zpět</span></div>`);
-    return { left: ['dailyTop', 'eloTop'], right: ['dailyHist', 'keys'] };
+    return { left: ['dailyTop', 'weeklyTop', 'eloTop'], right: ['dailyHist', 'keys'] };
   }
 
   // ----- duel -----
@@ -96,11 +100,8 @@
   function renderDailyPanels() {
     loadMenuData();
     const feed = document.getElementById('feed');
-    const words = feed ? [...feed.children].slice(0, 14) : [];
     const total = feed ? feed.children.length : 0;
-    setHtml(panel('dWords'), `<h4>Moje slova <small>${total}</small></h4>` + (words.length ? words.map((d, i) =>
-      `<div class="row"><span class="rk${i === 0 ? ' g' : ''}">${total - i}</span><span class="nm">${esc(d.textContent || '')}</span></div>`).join('')
-      : '<div class="row dim">Zatím žádné slovo.</div>'));
+    setHtml(panel('dWords'), `<h4>Nalezená slova</h4><div class="bignum">${total}</div><div class="hint">${total === 1 ? 'slovo' : (total >= 2 && total <= 4 ? 'slova' : 'slov')} v této výzvě</div>`);
     const daily = cache.daily;
     const best = daily && daily.length ? daily[0] : null;
     setHtml(panel('dTop'), `<h4>🏆 Žebříček dne <small>k překonání</small></h4>` + (daily === null ? '<div class="row dim">···</div>' : rows(daily.map((e, i) =>
@@ -162,7 +163,15 @@
   }
 
   let raf = 0;
-  function schedule() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; sync(); }); }
+  // Překreslení panelů nejvýš ~5× za sekundu (odpočty v kartě mění DOM každou chvíli);
+  // změna velikosti okna se řeší hned.
+  let lastSync = 0, syncT = 0;
+  function schedule(now) {
+    if (raf || syncT) return;
+    const wait = now === true ? 0 : Math.max(0, 200 - (Date.now() - lastSync));
+    const run = () => { syncT = 0; raf = requestAnimationFrame(() => { raf = 0; lastSync = Date.now(); sync(); }); };
+    if (wait) syncT = setTimeout(run, wait); else run();
+  }
 
   function sync() {
     if (!mqPointer.matches || window.innerWidth < 1060) { hideAll(); return; }
@@ -178,10 +187,10 @@
   }
 
   const appEl = document.getElementById('app');
-  if (appEl) new MutationObserver(schedule).observe(appEl, { childList: true, subtree: true, characterData: true });
-  window.addEventListener('resize', schedule);
-  mqPointer.addEventListener && mqPointer.addEventListener('change', schedule);
-  if (window.ResizeObserver) new ResizeObserver(schedule).observe(document.body);
+  if (appEl) new MutationObserver(() => schedule()).observe(appEl, { childList: true, subtree: true, characterData: true });
+  window.addEventListener('resize', () => schedule(true));
+  mqPointer.addEventListener && mqPointer.addEventListener('change', () => schedule(true));
+  if (window.ResizeObserver) new ResizeObserver(() => schedule(true)).observe(document.body);
   schedule();
 
   // ----- hlasitost: posuvník vedle ikony reproduktoru (jen myš / počítač) -----
@@ -195,15 +204,24 @@
         pop.innerHTML = '<input type="range" min="0" max="100" step="1" aria-label="Hlasitost" title="Hlasitost">';
         btn.after(pop);
         const r = pop.firstChild;
-        r.value = Math.round(soundVolume * 100);
-        r.addEventListener('input', () => { setSoundVolume(r.value / 100); r.style.setProperty('--v', r.value + '%'); });
+        r.addEventListener('input', () => {
+          const v = +r.value;
+          setSoundVolume(v / 100);
+          r.style.setProperty('--v', v + '%');
+          if (v === 0 && soundEnabled) setSoundEnabled(false);          // úplně dolů = vypnuto
+          else if (v > 0 && !soundEnabled) setSoundEnabled(true);
+        });
         r.addEventListener('change', () => { if (soundEnabled) playClick(); r.blur(); });
-        r.style.setProperty('--v', r.value + '%');
       }
-      pop.hidden = !soundEnabled;
+      const r = pop.firstChild, v = soundEnabled ? Math.round(soundVolume * 100) : 0;
+      if (+r.value !== v && document.activeElement !== r) r.value = v;
+      r.style.setProperty('--v', r.value + '%');
+      pop.hidden = false;
     });
   }
-  const volObs = new MutationObserver(() => syncVolume());
+  window.addEventListener('dopisto-sound', syncVolume);
+  let volRaf = 0;
+  const volObs = new MutationObserver(() => { if (!volRaf) volRaf = requestAnimationFrame(() => { volRaf = 0; syncVolume(); }); });
   if (appEl) volObs.observe(appEl, { childList: true, subtree: true });
   mqPointer.addEventListener && mqPointer.addEventListener('change', syncVolume);
   syncVolume();

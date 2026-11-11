@@ -26735,6 +26735,7 @@ diová
 dioxid
 dioxin
 dioxinový
+dip
 dipeptid
 diplegie
 diploid
@@ -26812,6 +26813,7 @@ disciplinovanější
 disciplinárka
 disciplinární
 disciplína
+discord
 disekce
 diseminace
 diseminátor
@@ -27327,6 +27329,7 @@ dlažkovice
 dlažkovický
 dlažov
 dlažovský
+dlc
 dle
 dlení
 dlesek
@@ -37588,6 +37591,7 @@ edgeworth
 edgeworthová
 edice
 edikt
+edin
 edinburgh
 edinburský
 edison
@@ -125624,7 +125628,9 @@ opatrnictví
 opatrničtější
 opatrník
 opatrný
+opatrně
 opatrnější
+opatrnost
 opatrovanec
 opatrovaný
 opatrovat
@@ -201272,6 +201278,7 @@ tvrdívání
 tvrdý
 tvrdě
 tvrději
+tvrdost
 tvrdší
 tvrský
 tvrz

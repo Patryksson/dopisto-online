@@ -27,7 +27,6 @@
       radial-gradient(70% 40% at 50% 104%, rgba(var(--glow), .16), transparent 70%),
       #0a0a0f;
   }
-  @media (hover: hover) and (pointer: fine) { body { background-attachment: fixed; } }
   /* Jemná zrnitost a ztmavené okraje (vrstvy za obsahem). */
   body::before {
     content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
@@ -130,7 +129,7 @@
   .sound-toggle { position: absolute; top: 12px; right: 12px; margin: 0; width: 36px; height: 36px; z-index: 2; }
 
   .bonus-badge { position:absolute; top:54px; right:12px; width:36px; height:36px; display:flex; align-items:center; justify-content:center; margin:0; padding:0; z-index:2; border:1px solid rgba(255,59,59,.55); border-radius:50%; background:rgba(255,59,59,.08); color:#fff; font-size:16px; cursor:pointer; animation: bonusPulse 2.4s ease-in-out infinite; }
-  @keyframes bonusPulse { 0%,100%{box-shadow:0 0 0 rgba(255,59,59,0)} 50%{box-shadow:0 0 12px rgba(255,59,59,.55)} }
+  @keyframes bonusPulse { 0%,100%{opacity:.75} 50%{opacity:1} }
   .bonus-badge .dbc-ic { color:#ff3b3b; }
   .bonus-badge-pop { position:absolute; top:96px; right:12px; max-width:220px; z-index:3; padding:10px 12px; border-radius: var(--r-md); background:#151515; border:1px solid rgba(255,59,59,.5); font-size:12px; line-height:1.4; color:#fff; box-shadow:0 8px 24px rgba(0,0,0,.5); }
   .bonus-badge[hidden], .bonus-badge-pop[hidden] { display:none; }
@@ -164,7 +163,7 @@
   .turn-status { text-align:center; font-size:14px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:9px 10px; margin:0 0 10px; border-radius: var(--r-md); border:1px dashed var(--dashline); color:var(--muted); background:transparent; transition: background .25s, color .25s, border-color .25s, box-shadow .25s; }
   .turn-status.mine { color:#fff; border-color:var(--accent); background:linear-gradient(180deg, rgba(255,59,59,.22), rgba(255,59,59,.08)); box-shadow:0 0 18px rgba(255,59,59,.35); animation: turnGlow 1.8s ease-in-out infinite; }
   .ts-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-right:6px; vertical-align:middle; }
-  @keyframes turnGlow { 0%,100%{ box-shadow:0 0 12px rgba(255,59,59,.25) } 50%{ box-shadow:0 0 22px rgba(255,59,59,.55) } }
+  @keyframes turnGlow { 0%,100%{ opacity:.82 } 50%{ opacity:1 } }
   .word-input { align-items: stretch; transition: opacity .2s; }
   .word-input.waiting { opacity: .55; }
   .wi-field { position: relative; flex: 1 1 auto; min-width: 0; display:flex; }
@@ -928,7 +927,7 @@ body.has-vk .br-spectate{margin:0 0 4px}
   /* bílé tečky okolo červených plných tlačítek (sedí k mřížce) */
   #playBtn, #findBtn, #dailyBtn, .nick-ok { outline: 1.5px dotted rgba(255,255,255,.5); outline-offset: 3px; }
   /* ---- napětí, rozpad, koruna, směr ---- */
-  body.danger::after { box-shadow: inset 0 0 90px 24px rgba(255,59,48,.55); animation: dangerPulse .5s ease-in-out infinite alternate; }
+  body.danger::after { background: radial-gradient(ellipse at center, transparent 55%, rgba(255,59,48,.55)); will-change: opacity; animation: dangerPulse .5s ease-in-out infinite alternate; }
   @keyframes dangerPulse { from { opacity: .55; } to { opacity: 1; } }
   body.danger .turn-timer-wrap, body.danger .br-timer { animation: tremble .12s linear infinite; }
   body.danger .turn-timer-bar { box-shadow: 0 0 10px #ff3b30; }
@@ -1173,3 +1172,99 @@ body.desk-duel .game-card .feed{display:none}
 .rules-panel .rules-body{transform:translateY(-4px);transition:transform .34s cubic-bezier(.2,.9,.3,1)}
 .rules-summary.open + .rules-panel .rules-body{transform:none}
 @media (prefers-reduced-motion:reduce){.nick-modal.sheet .sheet-box,.rules-panel,.rules-panel .rules-body{animation:none;transition:none}}
+
+/* ---- „Hrát online" na mobilu: karta přes celou obrazovku, bez scrollování a bez patičky ---- */
+@media (max-width: 600px) {
+  body:has(.page.play-full) { padding: 8px; align-items: stretch; }
+  .page.play-full { gap: 0; min-height: calc(100vh - 16px); }
+  @supports (height: 100dvh) { .page.play-full { min-height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); } }
+  .page.play-full .card { flex: 1 1 auto; display: flex; flex-direction: column; overflow: hidden; padding: clamp(10px, 1.6vh, 16px) 20px clamp(10px, 1.6vh, 18px); }
+  .page.play-full .play-title { margin-top: clamp(0px, .6vh, 6px); }
+  .page.play-full .divider { margin: 2px auto clamp(2px, 1.6vh, 14px); }
+  .page.play-full .mode-select { margin-top: clamp(0px, 1vh, 10px); }
+  .page.play-full .error { margin: 0; min-height: 12px; }
+  .page.play-full .or-sep { margin-top: auto; margin-bottom: clamp(4px, 1.4vh, 12px); }
+  .page.play-full .menu-item { padding-top: clamp(9px, 1.9vh, 14px); padding-bottom: clamp(9px, 1.9vh, 14px); }
+  .page.play-full .opt-stack { margin-top: clamp(2px, 1vh, 10px); }
+  .page.play-full .lobby-row { margin-top: auto; }
+  .page.play-full .seg-btn { flex: 1 1 auto; white-space: nowrap; letter-spacing: .3px; padding-left: 5px; padding-right: 5px; font-size: clamp(9.5px, 2.9vw, 12px); }
+}
+/* nižší telefony: vypustí se ukázky a vysvětlivky, ať se vše vejde bez posunu */
+@media (max-width: 600px) and (max-height: 700px) {
+  .page.play-full .custom-pat-hint { display: none; }
+  .page.play-full .mode-preview-row { display: none; }
+}
+@media (max-width: 600px) and (max-height: 640px) {
+  .page.play-full .divider { display: none; }
+}
+
+@media (max-width: 340px) { .page.play-full .seg-btn { letter-spacing: 0; padding-left: 3px; padding-right: 3px; font-size: 9px; } }
+
+/* ===== Menu: slim denní bonus + dvě čtvercové karty (denní / týdenní výzva) ===== */
+.bonus-card.slim{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 0;padding:7px 12px}
+.bonus-card.slim .bc-title{font-size:11px;font-weight:700;color:#fff;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap}
+.bonus-card.slim .bc-main{margin:0;min-height:0;font-size:12px;color:#ffb4b0;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bonus-card.slim .bc-info{all:unset;box-sizing:border-box;flex:none;width:22px;height:22px;border:1px solid rgba(255,255,255,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-style:italic;color:var(--muted);cursor:pointer}
+.bonus-card.slim .bc-info:hover{color:#fff;border-color:#fff}
+.chal-row{display:flex;gap:10px;margin:10px 0 0}
+.page.home .chal-row .chal-sq,.chal-row .chal-sq{flex:1 1 0;min-width:0;margin:0;padding:10px 8px 8px;display:flex;flex-direction:column;align-items:center;text-align:center;box-sizing:border-box;border-radius:4px}
+.chal-sq .cs-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#fff;white-space:nowrap}
+.chal-sq .cs-timer{text-transform:none;font-size:10.5px;color:var(--muted);letter-spacing:.03em;margin-top:2px;min-height:13px;white-space:nowrap}
+.chal-sq .cs-pat{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;margin:4px 0;font-family:'Archivo Black','Space Grotesk',sans-serif;font-size:clamp(24px,4.4vh,34px);letter-spacing:.06em;color:#fff;line-height:1.1;white-space:nowrap}
+.chal-sq .cs-pat.locked{color:rgba(255,255,255,.28)}
+.chal-sq .cs-pat .lk{font-size:16px;color:var(--accent);letter-spacing:0}
+.chal-sq .cs-note{font-size:10.5px;color:var(--muted);letter-spacing:.02em;margin:0 0 6px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:none}
+.chal-sq .menu-list{margin:0}
+.chal-sq .cs-btn{width:100%;justify-content:center;text-align:center;padding:10px 0;font-size:12px;letter-spacing:.14em;text-transform:uppercase;box-sizing:border-box;margin:0}
+.chal-sq .cs-btn span{flex:none}
+.page.home .chal-row .chal-sq .menu-item{padding-top:10px;padding-bottom:10px}
+.weekly-card{border:1px dashed rgba(255,176,46,.75);background:linear-gradient(180deg,rgba(255,176,46,.10),rgba(255,176,46,0))}
+.weekly-card .cs-pat.locked .lk,.weekly-card .cs-pat .lk{color:#ffb02e}
+.weekly-card .cs-pat:not(.locked){color:#ffd98a}
+#weeklyBtn{background:linear-gradient(180deg,#ffbe4d,#f08c00);border-color:#ffd27a;color:#1a1100;font-weight:700;box-shadow:none}
+#weeklyBtn:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 8px 22px rgba(255,176,46,.4)}
+.page.home .streak-chip{margin:6px 0 0}
+
+/* ===== Týdenní výzva (obrazovka) ===== */
+.weekly-screen .wk-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-right:44px;min-height:30px;font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+.weekly-screen .wk-title{font-weight:700;color:#ffd98a;white-space:nowrap}
+.weekly-screen .wk-back{margin:0;color:var(--muted);text-decoration:none;font-size:12px;letter-spacing:.06em;white-space:nowrap}
+.weekly-screen .wk-timer{color:var(--muted);letter-spacing:.03em;text-transform:none;white-space:nowrap;margin-left:auto}
+.weekly-screen .letter-tile.hl{border-color:#ffb02e;color:#ffd98a}
+.wk-stats{display:flex;gap:8px;margin:0 0 10px}
+.wk-stat{flex:1 1 0;min-width:0;padding:6px 4px;border:1px dashed rgba(255,176,46,.5);border-radius:4px;text-align:center;background:rgba(255,176,46,.05)}
+.wk-stat b{display:block;font-family:'Archivo Black','Space Grotesk',sans-serif;font-size:22px;line-height:1.1;color:#fff}
+.wk-stat b.pop{animation:wkpop .35s ease}
+@keyframes wkpop{0%{transform:scale(1)}40%{transform:scale(1.25);color:#ffd98a}100%{transform:scale(1)}}
+.wk-stat span{display:block;margin-top:2px;font-size:10px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wk-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 14px;margin:2px 0 4px}
+.wk-actions .link-btn{margin:0;color:var(--muted);font-size:11px;letter-spacing:.06em}
+.wk-actions .wk-prev{font-size:10.5px;color:var(--muted);letter-spacing:.02em}
+.feed.wk-words{display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;max-height:none}
+.wk-chip{display:inline-block;padding:3px 9px;border:1px dashed rgba(255,255,255,.28);border-radius:14px;font-size:12.5px;color:var(--win-ink,#9fe6b0);letter-spacing:.02em}
+.wk-chip.new{animation:wkchip .6s ease;border-color:#ffb02e;color:#ffd98a}
+@keyframes wkchip{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+.wk-empty{font-size:12px;color:var(--muted);line-height:1.5;padding:6px 2px}
+.wk-board-sub{font-size:12px;color:var(--muted);margin-bottom:8px}
+@media (prefers-reduced-motion:reduce){.wk-stat b.pop,.wk-chip.new{animation:none}}
+@media (max-width:600px) and (max-height:700px){.wk-stats{margin-bottom:6px}.wk-stat b{font-size:18px}.weekly-screen .used-count{display:none}}
+@media (max-width:360px){
+  .chal-row{gap:8px}
+  .chal-sq .cs-title{font-size:10px;letter-spacing:.05em}
+  .chal-sq .cs-timer,.chal-sq .cs-note{font-size:10px}
+  .bonus-card.slim .bc-title{font-size:10px;letter-spacing:.08em}
+  .bonus-card.slim .bc-main{font-size:11px}
+}
+
+/* Týdenní výzva — nové druhy zadání */
+.chal-sq .cs-pat.has-sub{flex-direction:column;gap:2px}
+.chal-sq .cs-pat .big{display:block;line-height:1.1}
+.chal-sq .cs-pat .sub{display:block;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#ffb02e}
+.weekly-card .cs-pat:not(.locked) .big{color:#ffd98a}
+.letter-tile.ban{color:#ff6a5f;border-color:#ff6a5f;text-decoration:line-through;text-decoration-thickness:3px}
+.letter-tile.tag{font-size:.55em;letter-spacing:.04em;color:#ffd98a;border-color:rgba(255,176,46,.6)}
+.weekly-screen .wk-sub{margin:-2px 0 6px;text-align:center;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#ffb02e}
+
+.side .bignum{font-size:84px;line-height:1;font-weight:700;color:#fff;text-align:center;padding:14px 0 4px;font-variant-numeric:tabular-nums;text-shadow:0 0 24px rgba(255,59,48,.45)}
+.side .bignum+.hint{text-align:center;margin-top:0}
+.vol-pop[hidden]{display:none}

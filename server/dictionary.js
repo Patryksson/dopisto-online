@@ -118,6 +118,42 @@ function dailyPattern(date = new Date()) {
   return { type: 'prefix2', value: dailyCycle(c)[dayIndex % n] };
 }
 
+// Týdenní výzva: jedna dvojice na celý týden (pondělí–neděle, UTC). Vybírá se jen z dvojic,
+// ke kterým existuje hodně slov (WEEKLY_MIN–WEEKLY_MAX), ať jde za týden vymyslet co nejvíc.
+// Pořadí se po cyklech deterministicky míchá a dva týdny po sobě nezačínají stejným písmenem.
+const WEEKLY_MIN = 800, WEEKLY_MAX = 3500;
+const _prefCount = {};
+for (const w of WORDS) { const k = w.slice(0, 2); _prefCount[k] = (_prefCount[k] || 0) + 1; }
+const WEEKLY_POOL = VALID_PREFIXES.filter(p => _prefCount[p] >= WEEKLY_MIN && _prefCount[p] <= WEEKLY_MAX).sort();
+const _weeklyCache = [];
+function weeklyCycle(c) {
+  if (_weeklyCache[c]) return _weeklyCache[c];
+  const prevLast = c > 0 ? weeklyCycle(c - 1).slice(-1)[0] : null;
+  const rnd = mulberry32(7919 * (c + 1));
+  const pool = WEEKLY_POOL.slice();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const seq = [];
+  while (pool.length) {
+    const last = seq.length ? seq[seq.length - 1] : prevLast;
+    let k = last ? pool.findIndex(p => p[0] !== last[0]) : 0;
+    if (k === -1) k = 0;
+    seq.push(pool.splice(k, 1)[0]);
+  }
+  return (_weeklyCache[c] = seq);
+}
+// Číslo týdne (týden začíná v pondělí; 1. 1. 1970 byl čtvrtek).
+function weekIndexOf(date = new Date()) {
+  const dayIndex = Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / 86400000);
+  return Math.floor((dayIndex + 3) / 7);
+}
+function weeklyPattern(date = new Date()) {
+  const n = WEEKLY_POOL.length, wi = weekIndexOf(date);
+  return { type: 'prefix2', value: weeklyCycle(Math.floor(wi / n))[wi % n] };
+}
+
 // Vlastní dvojice pro soukromé lobby: jen z ověřeného seznamu (ke každé existují slova).
 function customPattern(mode, raw) {
   if (typeof raw !== 'string') return null;
@@ -131,4 +167,5 @@ function customPattern(mode, raw) {
 module.exports = {
   customPattern, isValidWord, generatePattern, matchesPattern, patternInstruction,
   acceptableStartLetters, matchesRequiredLetter, dailyPattern,
+  weeklyPattern, weekIndexOf, WEEKLY_POOL,
 };

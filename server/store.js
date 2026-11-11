@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const FILE = path.join(__dirname, 'data', 'elo.json');
+const FILE = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'elo.json');
 
 function load() {
   try {
@@ -136,7 +136,7 @@ function dailyStats(nickname, wordCount) {
 }
 
 // ==== Hlášení chyb / nahlášení hráčů (soubor reports.json, max 500 záznamů) ====
-const REPORTS_FILE = path.join(__dirname, 'data', 'reports.json');
+const REPORTS_FILE = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'reports.json');
 function addReport(r) {
   let list = [];
   try { list = JSON.parse(fs.readFileSync(REPORTS_FILE, 'utf8')); } catch {}
@@ -169,4 +169,59 @@ function playerStats(nickname) {
   return { games: wins + losses + br.games, wins: wins + br.wins, losses: losses + (br.games - br.wins), brWins: br.wins, brGames: br.games };
 }
 
-module.exports = { recordBr, playerStats, addReport, getProfile, recordResult, leaderboard, recordDaily, dailyLeaderboard, dailyStats, dailyHistory, isGuestName };
+// ==== Týdenní výzva — slova každého hráče za týden (soubor weekly.json) ====
+// Ukládá se odděleně od elo.json a se zpožděním (slov jsou tisíce, nechceme zapisovat při každém).
+const WEEKLY_FILE = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'weekly.json');
+let wdb = (() => { try { return JSON.parse(fs.readFileSync(WEEKLY_FILE, 'utf8')); } catch { return {}; } })();
+wdb.weeks = wdb.weeks || {}; wdb.tops = wdb.tops || {};
+let wTimer = null, wDirty = false;
+function flushWeekly() {
+  if (wTimer) { clearTimeout(wTimer); wTimer = null; }
+  if (!wDirty) return;
+  wDirty = false;
+  try { fs.writeFileSync(WEEKLY_FILE + '.tmp', JSON.stringify(wdb)); fs.renameSync(WEEKLY_FILE + '.tmp', WEEKLY_FILE); } catch {}
+}
+function saveWeeklySoon() { wDirty = true; if (!wTimer) { wTimer = setTimeout(flushWeekly, 3000); if (wTimer.unref) wTimer.unref(); } }
+process.on('exit', flushWeekly);
+['SIGTERM', 'SIGINT'].forEach(sig => process.on(sig, () => { flushWeekly(); process.exit(0); }));
+
+function weeklyEntry(week, nickname, create) {
+  const w = wdb.weeks[week] || (create ? (wdb.weeks[week] = {}) : null);
+  if (!w) return null;
+  const k = key(nickname);
+  return w[k] || (create ? (w[k] = { name: nickname, words: [] }) : null);
+}
+function weeklyWords(week, nickname) {
+  const e = weeklyEntry(week, nickname, false);
+  return e ? e.words.slice() : [];
+}
+// Pořadí hráče: stejný počet slov = stejné místo. Hosté se do pořadí nepočítají.
+function weeklyRanking(week) {
+  const w = wdb.weeks[week] || {};
+  return Object.values(w).filter(e => !isGuestName(e.name) && e.words.length > 0)
+    .map(e => ({ name: e.name, count: e.words.length })).sort((a, b) => b.count - a.count);
+}
+function weeklyMe(week, nickname) {
+  const words = weeklyWords(week, nickname);
+  const ranking = weeklyRanking(week);
+  const guest = isGuestName(nickname);
+  const rank = guest || !words.length ? null : 1 + ranking.filter(r => r.count > words.length).length;
+  return { words, count: words.length, rank, total: ranking.length, leaderCount: ranking.length ? ranking[0].count : 0 };
+}
+function weeklyAdd(week, nickname, word, pattern) {
+  const e = weeklyEntry(week, nickname, true);
+  if (e.words.includes(word)) return false;
+  e.words.push(word);
+  e.name = nickname;
+  // uchovej jen posledních 6 týdnů; vítěz týdne zůstane v přehledu i po smazání detailů
+  Object.keys(wdb.weeks).sort().slice(0, -6).forEach(d => delete wdb.weeks[d]);
+  const top = weeklyRanking(week)[0];
+  wdb.tops[week] = { name: top ? top.name : null, count: top ? top.count : 0, players: weeklyRanking(week).length, pattern: pattern || null };
+  Object.keys(wdb.tops).sort().slice(0, -12).forEach(d => delete wdb.tops[d]);
+  saveWeeklySoon();
+  return true;
+}
+function weeklyLeaderboard(week, limit = 20) { return weeklyRanking(week).slice(0, limit); }
+function weeklyTop(week) { return wdb.tops[week] || null; }
+
+module.exports = { weeklyWords, weeklyMe, weeklyAdd, weeklyLeaderboard, weeklyTop, flushWeekly, recordBr, playerStats, addReport, getProfile, recordResult, leaderboard, recordDaily, dailyLeaderboard, dailyStats, dailyHistory, isGuestName };
