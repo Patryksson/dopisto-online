@@ -53,9 +53,7 @@ function saveNickname(n) {
 }
 
 const MODE_LABEL = { speed: '1 písmeno', 2: '2 písmena', middle: 'Uprostřed', br: '👑 Royale' };
-const MODE_ICON = { speed: '⚡', 2: 'Aa', middle: '·A·' };
 const MODE_ORDER = ['speed', 2, 'middle'];
-function isBigIcon(m) { return m === 'speed'; }
 
 // Malý náhled zadání nad segmentovaným přepínačem, á la "[⚡P] [AA] [⚽] [·A·]".
 function modePreviewText(m) {
@@ -132,10 +130,12 @@ const SOUND_PREFS_INFO = {
   penalty: { icon: '⚠️', label: 'Penalizace',    desc: 'Varovný zvuk při chybě a ztrátě času' },
   results: { icon: '🏆', label: 'Výhra / prohra', desc: 'Fanfára nebo smutný tón na konci hry' },
   vibrate: { icon: '📳', label: 'Vibrace',       desc: 'Jemné vibrace na mobilu (chyba, tvůj tah, konec)' },
+  xmas:    { icon: '🎄', label: 'Vánoční výzdoba', desc: 'Čepice na logu, girlanda a barvy menu (1. advent – 6. ledna)' },
+  snow:    { icon: '❄️', label: 'Sněžení',        desc: 'Jemné sněžení na pozadí hlavní stránky' },
   prefill: { icon: '✏️', label: 'Předvyplnit zadání', desc: 'Po odeslání se do pole samo vrátí zadané písmeno nebo dvojice' },
   vkeyboard: { icon: '⌨️', label: 'Vlastní klávesnice', desc: 'Česká klávesnice přímo ve hře, bez návrhů slov (jen mobil a tablet)' },
 };
-let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true, prefill: false, vkeyboard: true };
+let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true, xmas: true, snow: true, prefill: false, vkeyboard: true };
 try { Object.assign(soundPrefs, JSON.parse(localStorage.getItem('dopisto_sound_prefs') || '{}')); } catch {}
 function saveSoundPrefs() { try { localStorage.setItem('dopisto_sound_prefs', JSON.stringify(soundPrefs)); } catch {} }
 function soundOn(cat) { return soundEnabled && soundPrefs[cat] !== false; }
@@ -582,7 +582,7 @@ let menuTimer = null;
 const MOBILE_ONLY_PREFS = ['vibrate', 'vkeyboard'];
 function settingsHtml() {
   const pc = window.matchMedia('(hover:hover) and (pointer:fine)').matches;
-  return Object.keys(SOUND_PREFS_INFO).filter(k => !(pc && MOBILE_ONLY_PREFS.includes(k))).map(k => {
+  return Object.keys(SOUND_PREFS_INFO).filter(k => !(pc && MOBILE_ONLY_PREFS.includes(k)) && !((k === 'xmas' || k === 'snow') && !(window.xmasAvailable && xmasAvailable()))).map(k => {
     const i = SOUND_PREFS_INFO[k];
     return `
     <label class="setting-row">
@@ -658,6 +658,7 @@ function bindSettingsInputs(root) {
         ({ ticks: playTick, clicks: playClick, words: playSwoosh, penalty: playPenalty, results: playVictory }[cb.dataset.pref] || (() => {}))();
         if (cb.dataset.pref === 'vibrate') vibrate(40);
       }
+      if ((cb.dataset.pref === 'xmas' || cb.dataset.pref === 'snow') && window.xmasApply) xmasApply();
     };
   });
 }
@@ -672,7 +673,8 @@ function renderMenu(notice) {
     <div class="card">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       ${nickChipHtml()}
-      <div class="logo-wrap"><img class="logo" src="logo.png" alt="Dopišto" /></div>
+      ${typeof xmasGarland === 'function' ? xmasGarland() : ''}
+      <div class="logo-wrap"><img class="logo" src="${typeof logoSrc === 'function' ? logoSrc() : 'logo.png'}" alt="Dopišto" /></div>
       <div class="tagline">Slovní online duel</div>
       <div class="online-line" id="onlineLine"></div>
 
@@ -685,7 +687,7 @@ function renderMenu(notice) {
       <div class="bonus-card slim" id="bonusCard">
         <span class="bc-title">✦ Denní bonus</span>
         <span class="bc-main" id="bcMain">···</span>
-        <button type="button" class="bc-info" id="bcInfo" aria-label="Podrobnosti bonusu">i</button>
+        <button type="button" class="bc-info" id="bcInfo" aria-label="Podrobnosti bonusu"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 11v6"/><circle cx="12" cy="7.2" r=".6" fill="currentColor"/></svg></button>
       </div>
 
       <div class="chal-row">
@@ -722,6 +724,7 @@ function renderMenu(notice) {
     </div>
   `;
 
+  if (window.xmasApply) xmasApply();
   document.getElementById('soundBtn').onclick = toggleSound;
   bindNicknameBinding();
   bindRulesPanels();
@@ -761,7 +764,12 @@ function renderMenu(notice) {
   document.getElementById('weeklyBtn').onclick = () => {
     if (!requireNick()) return;
     ensureAudioCtx();
-    openWeekly();
+    const b = document.getElementById('weeklyBtn');
+    if (b) b.disabled = true;
+    loadWeekly().then(() => openWeekly()).catch(() => {
+      const e = document.getElementById('err');
+      if (e) e.textContent = 'Týdenní výzvu se nepodařilo načíst. Zkontroluj připojení a zkus to znovu.';
+    }).finally(() => { if (b && b.isConnected) b.disabled = false; });
   };
 
   document.getElementById('dailyBtn').onclick = () => {
@@ -818,18 +826,47 @@ function withBr(btn, fn) {
   }).finally(() => { if (btn && btn.isConnected) { btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = label; } });
 }
 
+function pluralSlov(n) { return n === 1 ? 'slovo' : (n >= 2 && n <= 4 ? 'slova' : 'slov'); }
+
+// Karta v menu: zadání týdne, odpočet a tvůj počet slov / pořadí.
+function loadWeeklyCard(onEnd) {
+  socket.emit('weekly_me', { nickname: loadNickname() }, (info) => {
+    const pat = document.getElementById('wkPattern');
+    const note = document.getElementById('wkNote');
+    const btn = document.getElementById('weeklyBtn');
+    if (!info || !pat || !note) return;
+    pat.classList.remove('locked');
+    pat.classList.toggle('has-sub', !!info.pattern.sub);
+    pat.innerHTML = `<span class="big">${esc(info.pattern.short)}</span>${info.pattern.sub ? `<span class="sub">${esc(info.pattern.sub)}</span>` : ''}`;
+    note.textContent = info.count
+      ? `${info.count} ${pluralSlov(info.count)}${info.rank ? ` · ${info.rank}. místo` : ''}`
+      : 'Bez časového limitu';
+    if (btn) btn.firstElementChild.textContent = info.count ? 'Pokračovat' : 'Hrát';
+    if (onEnd) onEnd(info.endsAt);
+  });
+}
+
+// Týdenní výzva (weekly.js) se stahuje až při jejím otevření.
+let weeklyLoadP = null;
+function loadWeekly() {
+  if (window.weeklyReady) return Promise.resolve();
+  if (weeklyLoadP) return weeklyLoadP;
+  const meta = document.querySelector('meta[name="lazy-weekly"]');
+  weeklyLoadP = new Promise((resolve, reject) => {
+    const sc = document.createElement('script');
+    sc.src = (meta && meta.content) || 'weekly.js';
+    sc.onload = () => resolve();
+    sc.onerror = () => { weeklyLoadP = null; sc.remove(); reject(new Error('weekly.js')); };
+    document.head.appendChild(sc);
+  });
+  return weeklyLoadP;
+}
+
 // Popisky bonusu musí v boxu na hlavní stránce vyjít na jeden řádek.
 const BONUS_SHORT = {
   lastSecond: 'Platné slovo, když ti zbývá méně než 5 s.',
   comeback: 'Platné slovo, když máš méně času než soupeř.',
 };
-// Zmenšuje písmo, dokud se text nevejde na jeden řádek (při nedostatku místa ho useká s „…").
-function fitOneLine(el, maxPx, minPx) {
-  if (!el) return;
-  let size = maxPx;
-  el.style.fontSize = size + 'px';
-  while (el.scrollWidth > el.clientWidth + 1 && size > minPx) { size -= 0.5; el.style.fontSize = size + 'px'; }
-}
 
 const BR_TURN_CHOICES = [10, 15, 20, 30];
 let brTurnSec = 15;
@@ -1002,124 +1039,8 @@ const FAQ_ITEMS = [
   ['Jak smažu svá data?', 'Otevři „Nastavení cookies“ a klikni na „Smazat data z tohoto zařízení“. ELO a žebříček jsou ale uložené na serveru podle přezdívky — o jejich smazání napiš přes „Kontakt“.'],
 ];
 
-function infoPageContent(key) {
-  switch (key) {
-    case 'faq':
-      return { title: 'Časté dotazy', body: FAQ_ITEMS.map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('') };
-    case 'kontakt':
-      return { title: 'Kontakt', body: `
-        <p>Máš dotaz, nápad nebo problém? Ozvi se nám.</p>
-        <h2>Provozovatel</h2><p>${siteOperator()}${SITE.address ? '<br>' + esc(SITE.address) : ''}</p>
-        <h2>E-mail</h2><p>${siteEmail()}</p>
-        <h2>Chyby a nápady</h2><p>Nejrychlejší je <a href="#nahlasit">formulář pro nahlášení chyby</a>.</p>` };
-    case 'podminky':
-      return { title: 'Obchodní podmínky', body: `
-        <p>Tyto podmínky upravují používání webové hry ${esc(SITE.name || 'Dopišto')} (dále „hra“). Provozovatel: ${siteOperator()}.</p>
-        <h2>1. Používání hry</h2>
-        <p>Hra je poskytována zdarma, bez registrace. Používáním hry souhlasíš s těmito podmínkami. Hra je určena pro zábavu a nezaručuje nepřetržitou dostupnost.</p>
-        <h2>2. Pravidla chování</h2>
-        <ul><li>Nepoužívej urážlivé, vulgární nebo klamavé přezdívky.</li>
-        <li>Nepokoušej se narušit chod hry (automatizované požadavky, zneužití chyb, obcházení omezení).</li>
-        <li>Nevydávej se za jiného hráče.</li></ul>
-        <p>Provozovatel může přezdívku odmítnout či odstranit z žebříčku a omezit přístup při porušení pravidel.</p>
-        <h2>3. Žebříček a výsledky</h2>
-        <p>ELO a výsledky jsou orientační a mohou být upraveny či resetovány (např. při chybě nebo při změně pravidel).</p>
-        <h2>4. Odpovědnost</h2>
-        <p>Hra je poskytována „tak, jak je“. Provozovatel neodpovídá za škody způsobené výpadkem nebo chybou hry v rozsahu, v jakém to dovoluje zákon.</p>
-        <h2>5. Změny podmínek</h2>
-        <p>Podmínky se mohou měnit. Aktuální znění je vždy na této stránce.</p>
-        <p style="color:var(--muted);font-size:12px">Poslední úprava: říjen 2026. Tento text je obecná šablona — před veřejným spuštěním ho nech zkontrolovat.</p>` };
-    case 'ochrana-udaju':
-      return { title: 'Ochrana údajů', body: `
-        <p>Správcem osobních údajů je ${siteOperator()}. Kontakt: ${siteEmail()}.</p>
-        <h2>Jaké údaje zpracováváme</h2>
-        <ul>
-          <li><b>Přezdívka</b> — zadáváš ji sám/sama. Zobrazuje se soupeři a v žebříčku.</li>
-          <li><b>Výsledky her</b> — ELO, počet výher a proher, výsledky Denní výzvy (nejlepší výsledek dne podle přezdívky, uchovává se několik dní).</li>
-          <li><b>IP adresa</b> — používá se pouze dočasně v paměti serveru k ochraně proti zneužití (omezení počtu spojení). Neukládá se do databáze.</li>
-          <li><b>Hlášení chyb</b> — text, který sám odešleš přes formulář, a volitelný kontakt.</li>
-        </ul>
-        <h2>Co ukládáme ve tvém prohlížeči</h2>
-        <p>Přezdívku, nastavení zvuku, sérii Denní výzvy a dnešní výsledek. Hra nepoužívá sledovací cookies ani analytiku třetích stran.</p>
-        <h2>Účel a doba uložení</h2>
-        <p>Údaje slouží k provozu hry (hledání soupeřů, žebříček). Přezdívka a ELO se uchovávají, dokud hra běží nebo dokud nepožádáš o smazání.</p>
-        <h2>Tvá práva</h2>
-        <p>Můžeš požádat o přístup k údajům, jejich opravu nebo smazání a podat stížnost u Úřadu pro ochranu osobních údajů (uoou.cz). Napiš na ${siteEmail()}.</p>
-        <p style="color:var(--muted);font-size:12px">Poslední úprava: říjen 2026. Tento text je obecná šablona — před veřejným spuštěním ho nech zkontrolovat.</p>` };
-    case 'cookies':
-      return { title: 'Nastavení cookies', body: `
-        <p>Hra nepoužívá cookies pro sledování ani reklamu. K fungování používá pouze <b>úložiště v prohlížeči</b> (localStorage):</p>
-        <ul><li>přezdívka,</li><li>nastavení zvuku a vibrací,</li><li>série a dnešní výsledek Denní výzvy.</li></ul>
-        <p>Toto úložiště je nezbytné pro fungování hry, proto se k němu neptáme na souhlas.</p>
-        <div class="menu-list" style="margin-top:16px"><button class="secondary small" id="clearDataBtn" style="width:100%">Smazat data z tohoto zařízení</button></div>
-        <div class="info-ok" id="clearDataMsg"></div>` };
-    case 'nahlasit':
-      return { title: 'Nahlásit chybu', body: `
-        <p>Něco nefunguje, chybí ti slovo ve slovníku nebo chceš nahlásit hráče? Napiš nám.</p>
-        <div class="info-form">
-          <label for="repType">O co jde</label>
-          <select id="repType">
-            <option value="bug">Chyba ve hře</option>
-            <option value="word">Chybí / je špatně slovo ve slovníku</option>
-            <option value="player">Nahlásit hráče</option>
-            <option value="idea">Nápad na vylepšení</option>
-          </select>
-          <label for="repText">Popis</label>
-          <textarea id="repText" maxlength="1000" placeholder="Popiš, co se stalo, nebo napiš slovo / přezdívku hráče…"></textarea>
-          <label for="repContact">Kontakt (nepovinné)</label>
-          <input id="repContact" maxlength="80" placeholder="E-mail, pokud chceš odpověď" />
-          <div class="menu-list" style="margin-top:16px"><button class="menu-item" id="repSend"><span>Odeslat</span></button></div>
-          <div class="error" id="repErr"></div>
-          <div class="info-ok" id="repOk"></div>
-        </div>` };
-    default:
-      return null;
-  }
-}
-
-function renderInfoPage(key) {
-  const page = infoPageContent(key);
-  if (!page) { renderMenu(); return; }
-  clearInterval(menuTimer);
-  app.innerHTML = `
-    <div class="page">
-    <div class="card info-card">
-      <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
-      <button type="button" class="back-link" id="infoBackBtn">‹ Zpět</button>
-      <h1>${page.title}</h1>
-      <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
-      <div class="info-body">${page.body}</div>
-    </div>
-    </div>`;
-  document.getElementById('soundBtn').onclick = toggleSound;
-  document.getElementById('infoBackBtn').onclick = () => { location.hash = ''; renderMenu(); };
-  window.scrollTo(0, 0);
-
-  if (key === 'cookies') {
-    document.getElementById('clearDataBtn').onclick = () => {
-      if (!confirm('Smazat přezdívku, nastavení a uložené výsledky z tohoto zařízení?')) return;
-      try { localStorage.clear(); } catch {}
-      document.getElementById('clearDataMsg').textContent = 'Hotovo — data z tohoto zařízení byla smazána.';
-    };
-  }
-  if (key === 'nahlasit') {
-    document.getElementById('repSend').onclick = () => {
-      const text = document.getElementById('repText').value.trim();
-      const err = document.getElementById('repErr');
-      const ok = document.getElementById('repOk');
-      err.textContent = ''; ok.textContent = '';
-      if (text.length < 5) { err.textContent = 'Napiš prosím aspoň pár slov.'; return; }
-      socket.emit('submit_report', {
-        type: document.getElementById('repType').value,
-        text,
-        contact: document.getElementById('repContact').value.trim(),
-        nickname: loadNickname(),
-      }, (res) => {
-        if (res && res.ok) { ok.textContent = 'Díky! Hlášení bylo odesláno.'; document.getElementById('repText').value = ''; }
-        else err.textContent = (res && res.message) || 'Odeslání se nepovedlo, zkus to později.';
-      });
-    };
-  }
+function renderInfoPage(key) {   // plná verze je v extra.js
+  loadExtra().then(() => { if (window.extraReady) renderInfoPage(key); else renderMenu(); }).catch(() => renderMenu());
 }
 
 // Stránky jsou adresovatelné přes #hash (sdílitelné odkazy, tlačítko zpět).
@@ -1438,6 +1359,7 @@ const EYE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" str
 const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.5 0 10.5 7 10.5 7a17 17 0 0 1-3.2 4M6.5 6.6A17.4 17.4 0 0 0 1.5 12S5.5 19 12 19c1.6 0 3-.3 4.3-.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
 
 function renderDailyResult(data, fromCache) {
+  loadExtra().catch(() => {});   // předem, ať sdílení nečeká na síť
   const historyHtml = data.words.length ? data.words.map(w => `<div class="p0">${w}</div>`).join('')
     : '<div style="color:var(--muted)">Ani jedno slovo se dnes nepovedlo — zkus to zítra znovu!</div>';
 
@@ -1520,124 +1442,22 @@ function renderDailyResult(data, fromCache) {
 
 // Vykreslí výsledek na plátno a nabídne sdílení (Web Share API na mobilu)
 // nebo stažení obrázku (na PC).
-function generateDailyShareImage(data) {
-  if (readDailyHide()) return generateDailyShareImageHidden(data);
-  const MAX_WORDS = 90;          // víc slov se na obrázek nevejde rozumně
-  const WORD_FONT = '15px Arial, sans-serif';
-  const LINE_H = 24;
-  const words = (data.words || []).slice(0, MAX_WORDS);
-  const extra = Math.max(0, (data.words || []).length - words.length);
+function generateDailyShareImage(data) { return null; }   // plná verze je v extra.js
 
-  // Nejdřív změř, kolik řádků slova zaberou, ať má obrázek správnou výšku.
-  const probe = document.createElement('canvas').getContext('2d');
-  probe.font = WORD_FONT;
-  const lines = layoutWordLines(probe, words.map(w => w.toUpperCase()), 480);
-  if (extra) lines.push(`+ ${extra} dalších`);
-  const wordsTop = 520;
-  const height = Math.max(760, wordsTop + (lines.length || 1) * LINE_H + 90);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = 600; canvas.height = height;
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = '#0a0a0a';
-  ctx.fillRect(0, 0, 600, height);
-  ctx.fillStyle = '#ff3131';
-  ctx.fillRect(0, 0, 600, 12);
-
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '700 42px Arial, sans-serif';
-  ctx.fillText('DOPIŠTO', 300, 100);
-
-  ctx.fillStyle = '#ff3131';
-  ctx.font = '700 20px Arial, sans-serif';
-  ctx.fillText('DENNÍ VÝZVA', 300, 132);
-
-  ctx.fillStyle = '#8890a6';
-  ctx.font = '16px Arial, sans-serif';
-  ctx.fillText(new Date().toLocaleDateString('cs-CZ'), 300, 160);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '700 46px Arial, sans-serif';
-  ctx.fillText(data.pattern.value.toUpperCase() + '···', 300, 230);
-
-  ctx.fillStyle = '#ff3131';
-  ctx.font = '700 130px Arial, sans-serif';
-  ctx.fillText(String(data.wordCount), 300, 390);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '700 22px Arial, sans-serif';
-  ctx.fillText('SLOV ZA 180 SEKUND', 300, 430);
-
-  // oddělovací čára + nadpis seznamu slov
-  ctx.fillStyle = '#2a2a2a';
-  ctx.fillRect(60, 458, 480, 1);
-  ctx.fillStyle = '#ff3131';
-  ctx.font = '700 13px Arial, sans-serif';
-  ctx.fillText('MÁ SLOVA', 300, 488);
-
-  ctx.fillStyle = '#c9ccd6';
-  ctx.font = WORD_FONT;
-  if (!lines.length) ctx.fillText('—', 300, wordsTop);
-  lines.forEach((line, i) => ctx.fillText(line, 300, wordsTop + i * LINE_H));
-
-  ctx.fillStyle = '#5a5a5a';
-  ctx.font = '13px Arial, sans-serif';
-  ctx.fillText((window.SITE && window.SITE.domain) || location.host || 'Dopišto', 300, height - 30);
-
-  return canvas;
-}
-
-// Zmenšená verze: jen počet slov, bez zadání a bez seznamu slov (nikomu nic neprozradí).
-function generateDailyShareImageHidden(data) {
-  const H = 560;
-  const canvas = document.createElement('canvas');
-  canvas.width = 600; canvas.height = H;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, 600, H);
-  ctx.fillStyle = '#ff3131'; ctx.fillRect(0, 0, 600, 12);
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffffff'; ctx.font = '700 42px Arial, sans-serif'; ctx.fillText('DOPIŠTO', 300, 110);
-  ctx.fillStyle = '#ff3131'; ctx.font = '700 20px Arial, sans-serif'; ctx.fillText('DENNÍ VÝZVA', 300, 142);
-  ctx.fillStyle = '#8890a6'; ctx.font = '16px Arial, sans-serif'; ctx.fillText(new Date().toLocaleDateString('cs-CZ'), 300, 170);
-  ctx.fillStyle = '#ff3131'; ctx.font = '700 150px Arial, sans-serif'; ctx.fillText(String(data.wordCount), 300, 330);
-  ctx.fillStyle = '#ffffff'; ctx.font = '700 22px Arial, sans-serif'; ctx.fillText('SLOV ZA 180 SEKUND', 300, 375);
-  const n = currentStreak();
-  if (n > 1) { ctx.fillStyle = '#c9ccd6'; ctx.font = '700 18px Arial, sans-serif'; ctx.fillText(`🔥 ${n} dní v řadě`, 300, 425); }
-  ctx.fillStyle = '#5a5a5a'; ctx.font = '13px Arial, sans-serif';
-  ctx.fillText((window.SITE && window.SITE.domain) || location.host || 'Dopišto', 300, H - 30);
-  return canvas;
-}
-
-// Rozdělí slova do řádků (oddělených „ · “) tak, aby se vešly do maxWidth.
-function layoutWordLines(ctx, words, maxWidth) {
-  const lines = [];
-  let line = '';
-  for (const w of words) {
-    const test = line ? `${line} · ${w}` : w;
-    if (line && ctx.measureText(test).width > maxWidth) { lines.push(line); line = w; }
-    else line = test;
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
-function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
-  const words = text.split(' ');
-  let line = '';
-  let curY = y;
-  for (const word of words) {
-    const testLine = line ? line + ' ' + word : word;
-    if (ctx.measureText(testLine).width > maxWidth && line) {
-      ctx.fillText(line, x, curY);
-      line = word;
-      curY += lineHeight;
-    } else {
-      line = testLine;
-    }
-  }
-  if (line) ctx.fillText(line, x, curY);
+// Zbytek aplikace (právní stránky, obrázek ke sdílení) se stahuje až když je potřeba.
+let extraLoadP = null;
+function loadExtra() {
+  if (window.extraReady) return Promise.resolve();
+  if (extraLoadP) return extraLoadP;
+  const meta = document.querySelector('meta[name="lazy-extra"]');
+  extraLoadP = new Promise((resolve, reject) => {
+    const sc = document.createElement('script');
+    sc.src = (meta && meta.content) || 'extra.js';
+    sc.onload = () => resolve();
+    sc.onerror = () => { extraLoadP = null; sc.remove(); reject(new Error('extra.js')); };
+    document.head.appendChild(sc);
+  });
+  return extraLoadP;
 }
 
 function dailyShareText(data) {
@@ -1646,6 +1466,7 @@ function dailyShareText(data) {
   return `Dopišto ${d}: ${data.wordCount} slov za 180 s${n > 1 ? ` · 🔥 ${n} dní v řadě` : ''}. Dokážeš víc? ${location.origin}`;
 }
 function shareDailyResult(data) {
+  if (!window.extraReady) { loadExtra().then(() => shareDailyResult(data)).catch(() => {}); return; }
   const canvas = generateDailyShareImage(data);
   canvas.toBlob((blob) => {
     if (!blob) return;

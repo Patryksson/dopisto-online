@@ -5,7 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const DIR = path.join(__dirname, '..', 'client');
-const HASHED = ['styles.css', 'fx.js', 'app.js', 'weekly.js', 'desktop.js', 'br.js'];
+const HASHED = ['styles.css', 'xmas.js', 'fx.js', 'app.js', 'weekly.js', 'desktop.js', 'br.js', 'extra.js'];
 
 let esbuild = null;
 if (!process.env.NO_MINIFY) { try { esbuild = require('esbuild'); } catch { /* bez minifikace */ } }
@@ -28,11 +28,29 @@ function build() {
   }
   // br.js se načítá až při vstupu do Royale; verzi bere app.js z <meta name="lazy-br">
   html = html.replace(/(name="lazy-br" content=")br\.js(?:\?v=[^"]*)?(")/, `$1br.js?v=${files['br.js'].hash}$2`);
+  html = html.replace(/(name="lazy-weekly" content=")weekly\.js(?:\?v=[^"]*)?(")/, `$1weekly.js?v=${files['weekly.js'].hash}$2`);
+  html = html.replace(/(name="lazy-extra" content=")extra\.js(?:\?v=[^"]*)?(")/, `$1extra.js?v=${files['extra.js'].hash}$2`);
+  // CSP: vložené <script> bloky z index.html se povolí podle hashe, ostatní skripty jen z vlastní domény.
+  const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => "'sha256-" + crypto.createHash('sha256').update(m[1]).digest('base64') + "'");
+  const csp = [
+    "default-src 'self'",
+    `script-src 'self' ${inline.join(' ')}`.trim(),
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",   // styly se v hře skládají i přes style="…"
+    "font-src https://fonts.gstatic.com",
+    "img-src 'self' data: blob:",
+    "connect-src 'self' ws: wss:",
+    "manifest-src 'self'",
+    "worker-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
   const version = crypto.createHash('sha1').update(HASHED.map(n => files[n].hash).join('') + html).digest('hex').slice(0, 10);
   const shell = ['/', '/socket.io/socket.io.js', ...HASHED.map(n => `/${n}?v=${files[n].hash}`), '/site-config.js', '/logo.png', '/manifest.webmanifest', '/favicon-32.png', '/icon-192.png'];
   const sw = fs.readFileSync(path.join(__dirname, 'sw.template.js'), 'utf8')
     .replace('__VERSION__', version).replace('__SHELL__', JSON.stringify(shell));
-  return { files, html, sw, version };
+  return { files, html, sw, version, csp };
 }
 
 function mount(app) {
@@ -46,7 +64,7 @@ function mount(app) {
     const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim() === 'https' ? 'https' : 'http';
     return `${proto}://${host}`;
   };
-  app.get(['/', '/index.html'], (req, res) => send(res, built.html.replace(/__ORIGIN__/g, origin(req)), 'text/html; charset=utf-8', 'no-cache'));
+  app.get(['/', '/index.html'], (req, res) => { res.setHeader('Content-Security-Policy', built.csp); send(res, built.html.replace(/__ORIGIN__/g, origin(req)), 'text/html; charset=utf-8', 'no-cache'); });
   app.get('/sw.js', (req, res) => { res.setHeader('Service-Worker-Allowed', '/'); send(res, built.sw, 'application/javascript; charset=utf-8', 'no-cache'); });
   for (const name of HASHED) {
     app.get('/' + name, (req, res) => {

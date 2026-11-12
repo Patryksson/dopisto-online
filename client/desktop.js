@@ -187,7 +187,11 @@
   }
 
   const appEl = document.getElementById('app');
-  if (appEl) new MutationObserver(() => schedule()).observe(appEl, { childList: true, subtree: true, characterData: true });
+  // Panely se překreslují jen při přidání/odebrání prvků (ne při každém tiknutí odpočtu, které mění jen text);
+  // pro jistotu navíc jednou za sekundu, dokud je karta vidět (setHtml nic nepřepisuje, když se obsah nezměnil).
+  const hasElement = (list) => { for (const n of list) if (n.nodeType === 1) return true; return false; };
+  if (appEl) new MutationObserver((recs) => { for (const r of recs) if (hasElement(r.addedNodes) || hasElement(r.removedNodes)) { schedule(); return; } }).observe(appEl, { childList: true, subtree: true });
+  setInterval(() => { if (!document.hidden) schedule(); }, 1000);
   window.addEventListener('resize', () => schedule(true));
   mqPointer.addEventListener && mqPointer.addEventListener('change', () => schedule(true));
   if (window.ResizeObserver) new ResizeObserver(() => schedule(true)).observe(document.body);

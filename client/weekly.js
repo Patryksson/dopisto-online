@@ -1,29 +1,10 @@
 // ==== Týdenní výzva ====
+// (Tenhle soubor se stahuje až při otevření týdenní výzvy; karta v menu je v app.js.)
 // Jedno zadání na celý týden (po–ne, UTC). Bez časového limitu: otevřeš ji kdy chceš, slova se
 // ti sčítají a server je drží. Tady je jen karta v menu a obrazovka s hrou (data jsou na serveru).
 
 let weeklyState = null;
 let weeklyTimer = null;
-
-function pluralSlov(n) { return n === 1 ? 'slovo' : (n >= 2 && n <= 4 ? 'slova' : 'slov'); }
-
-// Karta v menu: zadání týdne, odpočet a tvůj počet slov / pořadí.
-function loadWeeklyCard(onEnd) {
-  socket.emit('weekly_me', { nickname: loadNickname() }, (info) => {
-    const pat = document.getElementById('wkPattern');
-    const note = document.getElementById('wkNote');
-    const btn = document.getElementById('weeklyBtn');
-    if (!info || !pat || !note) return;
-    pat.classList.remove('locked');
-    pat.classList.toggle('has-sub', !!info.pattern.sub);
-    pat.innerHTML = `<span class="big">${esc(info.pattern.short)}</span>${info.pattern.sub ? `<span class="sub">${esc(info.pattern.sub)}</span>` : ''}`;
-    note.textContent = info.count
-      ? `${info.count} ${pluralSlov(info.count)}${info.rank ? ` · ${info.rank}. místo` : ''}`
-      : 'Bez časového limitu';
-    if (btn) btn.firstElementChild.textContent = info.count ? 'Pokračovat' : 'Hrát';
-    if (onEnd) onEnd(info.endsAt);
-  });
-}
 
 function openWeekly(notice) {
   socket.emit('open_weekly', { nickname: loadNickname() }, (data) => {
@@ -178,3 +159,5 @@ function shareWeekly() {
   const done = () => { const h = document.getElementById('gameErr'); if (h) { h.textContent = 'Text ke sdílení je zkopírovaný.'; setTimeout(() => { if (h) h.textContent = ''; }, 2500); } };
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, () => {});
 }
+
+window.weeklyReady = true;

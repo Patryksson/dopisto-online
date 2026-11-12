@@ -21,6 +21,8 @@
 <meta name="twitter:description" content="Napiš slovo se zadanými písmeny dřív než soupeř. Zdarma, bez registrace.">
 <meta name="twitter:image" content="__ORIGIN__/og-image.png">
 <meta name="lazy-br" content="br.js">
+<meta name="lazy-weekly" content="weekly.js">
+<meta name="lazy-extra" content="extra.js">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -30,12 +32,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<link rel="preload" href="logo.png" as="image">
 <link rel="preload" href="icon-192.png" as="image">
 <style>
 #splash{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;transition:opacity .28s ease}
 #splash.out{opacity:0;pointer-events:none}
-#splash img{width:96px;height:96px;animation:splashPulse 1.4s ease-in-out infinite}
+#splash img{width:96px;height:96px;object-fit:contain;animation:splashPulse 1.4s ease-in-out infinite}
 @keyframes splashPulse{0%,100%{opacity:.85;transform:scale(1)}50%{opacity:1;transform:scale(1.04)}}
 @media (prefers-reduced-motion:reduce){#splash img{animation:none}}
 </style>
@@ -46,8 +47,8 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="site-config.js"></script>
+<script src="xmas.js"></script>
 <script src="fx.js"></script>
-<script src="weekly.js"></script>
 <script src="app.js"></script>
 <script src="desktop.js"></script>
 <script>

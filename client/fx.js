@@ -109,3 +109,6 @@ function fxShatter(el, rgb) {
     setTimeout(() => s.remove(), 1300);
   }
 }
+
+// Skrytá karta: animace stojí (šetří baterii a procesor).
+document.addEventListener('visibilitychange', () => document.documentElement.classList.toggle('tab-hidden', document.hidden));

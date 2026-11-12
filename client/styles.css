@@ -1204,7 +1204,7 @@ body.desk-duel .game-card .feed{display:none}
 .bonus-card.slim{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 0;padding:7px 12px}
 .bonus-card.slim .bc-title{font-size:11px;font-weight:700;color:#fff;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap}
 .bonus-card.slim .bc-main{margin:0;min-height:0;font-size:12px;color:#ffb4b0;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bonus-card.slim .bc-info{all:unset;box-sizing:border-box;flex:none;width:22px;height:22px;border:1px solid rgba(255,255,255,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-style:italic;color:var(--muted);cursor:pointer}
+.bonus-card.slim .bc-info{all:unset;box-sizing:border-box;flex:none;width:22px;height:22px;border:1px solid rgba(255,255,255,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);cursor:pointer}
 .bonus-card.slim .bc-info:hover{color:#fff;border-color:#fff}
 .chal-row{display:flex;gap:10px;margin:10px 0 0}
 .page.home .chal-row .chal-sq,.chal-row .chal-sq{flex:1 1 0;min-width:0;margin:0;padding:10px 8px 8px;display:flex;flex-direction:column;align-items:center;text-align:center;box-sizing:border-box;border-radius:4px}
@@ -1288,4 +1288,69 @@ body.desk-duel .game-card .feed{display:none}
   .page.home .tab b{height:20px}
   .page.home .tab b svg{width:19px;height:19px}
   .page.home .site-footer{font-size:10px}
+}
+
+/* ===== Vánoce (1. advent – 6. 1.) ===== */
+.page.home .card{position:relative}
+.xm-garland{display:none;position:absolute;top:0;left:0;right:0;height:0;pointer-events:none;user-select:none;z-index:1;animation:xmGlow 2.8s ease-in-out infinite alternate}
+/* girlanda je přes celou šířku karty, konce lana v rozích čtverce */
+.xm-garland img{position:absolute;left:0;top:-2px;width:100%;height:auto;transform-origin:0 0;transform:rotate(-4deg)}
+.xmas .xm-garland{display:block}
+@keyframes xmGlow{from{opacity:.82}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.xm-garland{animation:none}}
+.xm-snow{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.xm-ico{display:inline-block;vertical-align:-3px;width:14px;height:16px;margin-right:2px}
+/* barvy menu: červená + zelená záře, zlaté rámečky, zelená denní výzva */
+.xmas body:has(.page.home){background:
+  radial-gradient(60% 34% at 50% 5%, rgba(255,59,48,.26), transparent 70%),
+  radial-gradient(75% 40% at 50% 100%, rgba(38,190,110,.20), transparent 70%),
+  linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px) 0 0 / 34px 34px,
+  linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px) 0 0 / 34px 34px,#07090c}
+.xmas .page.home .card{border-color:rgba(255,201,60,.6);box-shadow:0 0 0 4px rgba(255,201,60,.05),0 0 28px rgba(38,190,110,.12)}
+.xmas .bonus-card.slim,.xmas .stats-card{border-color:rgba(255,201,60,.55);background:linear-gradient(180deg,rgba(255,201,60,.06),rgba(255,201,60,.01))}
+.xmas .bonus-card.slim .bc-main{color:#ffd98a}
+.xmas .page.home .daily-card:not(.weekly-card){border-color:rgba(46,196,120,.65);background:linear-gradient(180deg,rgba(46,196,120,.10),rgba(46,196,120,0))}
+.xmas #dailyBtn{background:linear-gradient(180deg,#34c97f,#1a9a5a);border-color:#7be0ae;outline-color:rgba(255,255,255,.5);box-shadow:none}
+.xmas #dailyBtn:hover{box-shadow:0 10px 26px rgba(46,196,120,.5)}
+.xmas .page.home .nick-chip,.xmas .page.home .sound-toggle{top:46px}
+.xmas .page.home .tagline{color:#ffd98a}
+
+/* zelená místo černé kolem loga */
+.xmas .page.home .card{background:radial-gradient(95% 52% at 50% 26%, rgba(38,170,100,.30), rgba(38,170,100,.10) 60%, transparent 80%), rgba(6,15,11,.9)}
+.xmas .page.home .logo-wrap::before{background:radial-gradient(ellipse 50% 50% at 50% 50%,rgba(255,59,48,.34),rgba(255,59,48,.08) 55%,transparent 100%)}
+.xmas .page.home .nick-chip{background:rgba(6,15,11,.92)}
+.xmas .page.home .logo{transform:scale(.88)}
+
+/* týdenní výzva přes Vánoce: světle modrá */
+.xmas .page.home .weekly-card{border-color:rgba(110,205,255,.7);background:linear-gradient(180deg,rgba(110,205,255,.12),rgba(110,205,255,0))}
+.xmas .page.home .weekly-card .cs-title,.xmas .page.home .weekly-card .cs-pat{color:#bfe9ff}
+.xmas #weeklyBtn{background:linear-gradient(180deg,#8fdcff,#4db4ee);border-color:#c4ecff;color:#04202f;box-shadow:none}
+.xmas #weeklyBtn:hover{box-shadow:0 10px 26px rgba(110,205,255,.5)}
+/* sníh přes horní okraj „Hrát online“ (obrázek od uživatele) */
+.xm-snowcap{display:none}
+.xmas #playBtn{position:relative;overflow:visible}
+.xmas .xm-snowcap{display:block;position:absolute;left:-1px;right:-1px;top:-19px;width:calc(100% + 2px);height:35px;object-fit:fill;pointer-events:none;user-select:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+.xmas .weekly-card .cs-pat .lk{color:#8fdcff}
+.xmas .weekly-card .cs-pat,.xmas .weekly-card .cs-pat .big{color:#cfeeff}
+
+/* sněhová vrstva na spodku karty, pod záložkami */
+.xm-drift{display:none}
+.xmas .page.home .card{padding-bottom:calc(12px + 14px)}
+.xmas .xm-drift{display:block;position:absolute;left:1px;right:1px;bottom:1px;height:20px;pointer-events:none;border-radius:0 0 13px 13px;overflow:hidden}
+.xmas .xm-drift svg{display:block;width:100%;height:100%;filter:drop-shadow(0 -1px 2px rgba(150,210,255,.25))}
+
+/* šetření: skrytá karta = animace stojí; „omezit pohyb“ vypne nekonečné animace všude */
+.tab-hidden *,.tab-hidden *::before,.tab-hidden *::after{animation-play-state:paused!important}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-iteration-count:1!important;animation-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* Velmi nízké displeje (např. 320×568): stránka se nemá posouvat, logo má mít místo */
+@media (max-height:620px){
+  .page.home .error:empty{display:none}
+  .page.home .stats-card{margin:6px 0 2px;padding:4px 10px 5px}
+  .page.home .stats-card .sc-title{display:none}
+  .page.home .sc-row b{font-size:15px}
+  .page.home .online-line{margin:2px 0}
+  .page.home .chal-row .chal-sq .cs-note{display:none}
+  .page.home .tab{padding-top:3px;padding-bottom:0}
+  .page.home .site-footer{margin-top:2px}
 }
