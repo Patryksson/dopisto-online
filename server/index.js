@@ -26,7 +26,7 @@ app.use(express.static(path.join(__dirname, '..', 'client'), {
   // malé soubory, krátká cache + etag revalidace stačí (rychlé, ale pořád
   // aktuální po nasazení nové verze).
   setHeaders(res, filePath) {
-    if (filePath.endsWith('.png') || filePath.endsWith('.jpg') || filePath.endsWith('.webp')) {
+    if (filePath.endsWith('.png') || filePath.endsWith('.jpg') || filePath.endsWith('.webp') || filePath.endsWith('.mp3')) {
       res.setHeader('Cache-Control', 'public, max-age=604800, immutable'); // 7 dní
     } else {
       res.setHeader('Cache-Control', 'no-cache'); // vždy ověřit (ETag) — změny se projeví hned

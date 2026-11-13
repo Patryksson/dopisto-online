@@ -148,9 +148,10 @@ const SOUND_PREFS_INFO = {
   xmas:    { icon: '🎄', label: 'Vánoční výzdoba', desc: 'Čepice na logu, girlanda a barvy menu (1. advent – 6. ledna)' },
   snow:    { icon: '❄️', label: 'Sněžení',        desc: 'Jemné sněžení na pozadí hlavní stránky' },
   prefill: { icon: '✏️', label: 'Předvyplnit zadání', desc: 'Po odeslání se do pole samo vrátí zadané písmeno nebo dvojice' },
+  searchMusic: { icon: '🎵', label: 'Hudba při hledání soupeře', desc: 'Krátká smyčka, dokud hledáš soupeře (výchozí vypnuto, stáhne se až po zapnutí)' },
   vkeyboard: { icon: '⌨️', label: 'Vlastní klávesnice', desc: 'Česká klávesnice přímo ve hře, bez návrhů slov (jen mobil a tablet)' },
 };
-let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true, xmas: true, snow: true, prefill: false, vkeyboard: true };
+let soundPrefs = { ticks: true, clicks: true, words: true, penalty: true, results: true, vibrate: true, xmas: true, snow: true, prefill: false, searchMusic: false, vkeyboard: true };
 try { Object.assign(soundPrefs, JSON.parse(localStorage.getItem('dopisto_sound_prefs') || '{}')); } catch {}
 function saveSoundPrefs() { try { localStorage.setItem('dopisto_sound_prefs', JSON.stringify(soundPrefs)); } catch {} }
 function soundOn(cat) { return soundEnabled && soundPrefs[cat] !== false; }
@@ -180,6 +181,61 @@ function ensureAudioCtx() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
   return audioCtx;
 }
+
+// ==== Hudba při hledání soupeře (volitelná, výchozí vypnuto) ====
+// Smyčka se stáhne až když ji hráč zapne a hledá soupeře. Web Audio kvůli plynulé smyčce
+// (loopStart/loopEnd ořízne tiché okraje MP3, takže mezi opakováním není mezera).
+const SEARCH_MUSIC_URL = '/audio/search-loop-v1.mp3';
+const SEARCH_LOOP = { start: 0.0323, end: 20.2469 };
+const searchMusic = { buf: null, loading: null, src: null, gain: null, want: false, timer: null };
+function loadSearchMusic(ctx) {
+  if (searchMusic.buf) return Promise.resolve(searchMusic.buf);
+  if (!searchMusic.loading) {
+    searchMusic.loading = fetch(SEARCH_MUSIC_URL)
+      .then(r => { if (!r.ok) throw new Error('music ' + r.status); return r.arrayBuffer(); })
+      .then(ab => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)))
+      .then(b => (searchMusic.buf = b))
+      .catch(() => { searchMusic.loading = null; return null; });
+  }
+  return searchMusic.loading;
+}
+async function startSearchMusic() {
+  if (soundPrefs.searchMusic !== true || !soundEnabled || searchMusic.want) return;
+  searchMusic.want = true;
+  const ctx = ensureAudioCtx();
+  const buf = await loadSearchMusic(ctx);
+  if (!buf || !searchMusic.want || searchMusic.src) return;
+  const src = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  src.buffer = buf; src.loop = true; src.loopStart = SEARCH_LOOP.start; src.loopEnd = SEARCH_LOOP.end;
+  gain.gain.setValueAtTime(0, ctx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.55, ctx.currentTime + 0.8);
+  src.connect(gain); gain.connect(audioMaster(ctx));
+  src.start(0, SEARCH_LOOP.start);
+  searchMusic.src = src; searchMusic.gain = gain;
+  // Pojistka: hudba hraje jen dokud je na obrazovce hledání, zvuk zapnutý a karta viditelná.
+  clearInterval(searchMusic.timer);
+  searchMusic.timer = setInterval(() => {
+    if (!document.getElementById('cancelBtn') || !soundEnabled || soundPrefs.searchMusic !== true || document.hidden) stopSearchMusic();
+  }, 500);
+}
+function stopSearchMusic() {
+  searchMusic.want = false;
+  clearInterval(searchMusic.timer);
+  const { src, gain } = searchMusic;
+  searchMusic.src = null; searchMusic.gain = null;
+  if (!src) return;
+  try {
+    const t = audioCtx.currentTime;
+    gain.gain.cancelScheduledValues(t);
+    gain.gain.setValueAtTime(gain.gain.value, t);
+    gain.gain.linearRampToValueAtTime(0, t + 0.35);
+    src.stop(t + 0.4);
+  } catch { try { src.stop(); } catch {} }
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && document.getElementById('cancelBtn') && document.querySelector('.spinner')) startSearchMusic();
+});
 
 function playTick() {
   if (!soundOn('ticks')) return;
@@ -603,7 +659,7 @@ function settingsHtml() {
     <label class="setting-row">
       <span class="setting-ic">${i.icon}</span>
       <span class="setting-text"><b>${i.label}</b><small>${i.desc}</small></span>
-      <input type="checkbox" class="switch" data-pref="${k}" ${(k === 'prefill' ? soundPrefs[k] === true : soundPrefs[k] !== false) ? 'checked' : ''} />
+      <input type="checkbox" class="switch" data-pref="${k}" ${((k === 'prefill' || k === 'searchMusic') ? soundPrefs[k] === true : soundPrefs[k] !== false) ? 'checked' : ''} />
     </label>`;
   }).join('') + (pc ? '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře (nebo posuvník hlasitosti úplně dolů). „Předvyplnit zadání“ se projeví od příští hry.</div>' : '<div class="setting-note">Všechny zvuky naráz vypne ikona reproduktoru vpravo nahoře. „Vlastní klávesnice“ a „Předvyplnit zadání“ se projeví od příští hry.</div>');
 }
@@ -673,6 +729,7 @@ function bindSettingsInputs(root) {
         ({ ticks: playTick, clicks: playClick, words: playSwoosh, penalty: playPenalty, results: playVictory }[cb.dataset.pref] || (() => {}))();
         if (cb.dataset.pref === 'vibrate') vibrate(40);
       }
+      if (cb.dataset.pref === 'searchMusic' && !cb.checked) stopSearchMusic();
       if ((cb.dataset.pref === 'xmas' || cb.dataset.pref === 'snow') && window.xmasApply) xmasApply();
     };
   });
@@ -1603,9 +1660,11 @@ function renderSearching(nickname) {
     </div>
   `;
   document.getElementById('cancelBtn').onclick = () => {
+    stopSearchMusic();
     socket.emit('cancel_find_match');
     renderMenu();
   };
+  startSearchMusic();
 }
 
 // ==== Vytvoření lobby — čekání na soupeře s kódem ====
@@ -2455,6 +2514,7 @@ socket.on('lobby_expired', () => {
 });
 
 socket.on('match_found', (data) => {
+  stopSearchMusic();
   closeReportModal();
   clearInterval(rematchTimer);
   currentLobbyCode = null;
