@@ -191,22 +191,41 @@ function generateDailyShareImage(data) {
 
 // Zmenšená verze: jen počet slov, bez zadání a bez seznamu slov (nikomu nic neprozradí).
 function generateDailyShareImageHidden(data) {
-  const H = 560;
+  const H = 664;
   const canvas = document.createElement('canvas');
   canvas.width = 600; canvas.height = H;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, 600, H);
   ctx.fillStyle = '#ff3131'; ctx.fillRect(0, 0, 600, 12);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffffff'; ctx.font = '700 42px Arial, sans-serif'; ctx.fillText('DOPIŠTO', 300, 110);
-  ctx.fillStyle = '#ff3131'; ctx.font = '700 20px Arial, sans-serif'; ctx.fillText('DENNÍ VÝZVA', 300, 142);
-  ctx.fillStyle = '#8890a6'; ctx.font = '16px Arial, sans-serif'; ctx.fillText(new Date().toLocaleDateString('cs-CZ'), 300, 170);
-  ctx.fillStyle = '#ff3131'; ctx.font = '700 150px Arial, sans-serif'; ctx.fillText(String(data.wordCount), 300, 330);
-  ctx.fillStyle = '#ffffff'; ctx.font = '700 22px Arial, sans-serif'; ctx.fillText('SLOV ZA 180 SEKUND', 300, 375);
+  ctx.fillStyle = '#ffffff'; ctx.font = '700 42px Arial, sans-serif'; ctx.fillText('DOPIŠTO', 300, 100);
+  ctx.fillStyle = '#ff3131'; ctx.font = '700 20px Arial, sans-serif'; ctx.fillText('DENNÍ VÝZVA', 300, 132);
+  ctx.fillStyle = '#8890a6'; ctx.font = '16px Arial, sans-serif'; ctx.fillText(new Date().toLocaleDateString('cs-CZ'), 300, 160);
+  ctx.fillStyle = '#ff3131'; ctx.font = '700 150px Arial, sans-serif'; ctx.fillText(String(data.wordCount), 300, 310);
+  ctx.fillStyle = '#ffffff'; ctx.font = '700 22px Arial, sans-serif'; ctx.fillText('SLOV ZA 180 SEKUND', 300, 352);
+
+  // Sloupcový profil: kolik slov mělo 3, 4, 5, 6, 7 a 8+ písmen (žádná písmena slov se neukazují).
+  const { counts, longest } = wordLengthProfile(data.words);
+  const max = Math.max(...counts, 1);
+  const labels = ['3', '4', '5', '6', '7', '8+'];
+  const bw = 52, gap = 16, total = labels.length * bw + (labels.length - 1) * gap;
+  const x0 = (600 - total) / 2, base = 540, maxH = 120;
+  counts.forEach((c, i) => {
+    const h = c ? Math.max(8, Math.round((c / max) * maxH)) : 3;
+    const x = x0 + i * (bw + gap);
+    const g = ctx.createLinearGradient(0, base - h, 0, base);
+    g.addColorStop(0, '#ff5a3c'); g.addColorStop(1, '#c4352e');
+    ctx.fillStyle = c ? g : '#2a2d37';
+    ctx.fillRect(x, base - h, bw, h);
+    ctx.fillStyle = '#ffffff'; ctx.font = '700 15px Arial, sans-serif'; ctx.fillText(String(c), x + bw / 2, base - h - 8);
+    ctx.fillStyle = '#8890a6'; ctx.font = '14px Arial, sans-serif'; ctx.fillText(labels[i], x + bw / 2, base + 20);
+  });
+  ctx.fillStyle = '#8890a6'; ctx.font = '12px Arial, sans-serif'; ctx.fillText('počet slov podle délky', 300, base + 40);
   const n = currentStreak();
-  if (n > 1) { ctx.fillStyle = '#c9ccd6'; ctx.font = '700 18px Arial, sans-serif'; ctx.fillText(`🔥 ${n} dní v řadě`, 300, 425); }
+  ctx.fillStyle = '#c9ccd6'; ctx.font = '700 16px Arial, sans-serif';
+  ctx.fillText(`Nejdelší slovo: ${longest} písmen${n > 1 ? ` · 🔥 ${n} dní v řadě` : ''}`, 300, base + 68);
   ctx.fillStyle = '#5a5a5a'; ctx.font = '13px Arial, sans-serif';
-  ctx.fillText((window.SITE && window.SITE.domain) || location.host || 'Dopišto', 300, H - 30);
+  ctx.fillText((window.SITE && window.SITE.domain) || location.host || 'Dopišto', 300, H - 18);
   return canvas;
 }
 

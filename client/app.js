@@ -15,6 +15,21 @@ function patternDisplayBlock(pattern, extraClass) {
   return patternTilesHtml(pattern, extraClass);
 }
 
+// Jednotná „karta zadání“: velikost l (odpočet, čekání), m (během hry), s (štítek ve výsledku).
+function taskCardHtml(pattern, size, o = {}) {
+  const tiles = o.tilesHtml || patternTilesHtml(pattern, size === 'l' ? 'reveal' : '');
+  const cls = `tc tc-${size}${o.cls ? ' ' + o.cls : ''}`;
+  if (size === 's') return `<div class="${cls}">${tiles}${o.label ? `<span class="tc-lab">${esc(o.label)}</span>` : ''}</div>`;
+  const rule = o.rule != null ? o.rule : patternInstruction(pattern);
+  const sub = o.sub ? `<small>${esc(o.sub)}</small>` : '';
+  const cnt = size === 'm' && o.count != null ? `<div class="tc-cnt" id="usedCount"><b>${o.count}</b>${pluralSlov(o.count)}</div>` : '';
+  return `<div class="${cls}">${tiles}<div class="tc-rule">${esc(rule)}${sub}</div>${cnt}</div>`;
+}
+function setUsedCount(n) {
+  const el = document.getElementById('usedCount');
+  if (el) el.innerHTML = `<b>${n}</b>${pluralSlov(n)}`;
+}
+
 function patternInstruction(pattern) {
   if (pattern.type === 'infix2') return `Slovo musí obsahovat "${pattern.value}" (kdekoliv).`;
   return `Slovo musí začínat na "${pattern.value}".`;
@@ -872,47 +887,46 @@ const BR_TURN_CHOICES = [10, 15, 20, 30];
 let brTurnSec = 15;
 try { const v = Number(localStorage.getItem('dopisto_br_turn')); if (BR_TURN_CHOICES.includes(v)) brTurnSec = v; } catch {}
 
+const MODE_HERO = {
+  speed:  { tiles: ['P'], total: 1, name: '1 písmeno', rule: 'Slovo musí začínat daným písmenem. Na každý tah máš 10 sekund, správné slovo ti čas prodlouží.', ex: ['pes', 'pivo', 'pták'], facts: [['10 s', 'NA TAH'], ['1 : 1', 'DUEL'], ['ELO', 'ŽEBŘÍČEK']] },
+  2:      { tiles: ['Ú', 'Č'], total: 2, name: '2 písmena', rule: 'Slovo musí začínat danou dvojicí. Každý hráč má 90 sekund a za správné slovo si čas prodlužuje.', ex: ['úča', 'účet', 'účel'], facts: [['90 s', 'ČAS'], ['1 : 1', 'DUEL'], ['ELO', 'ŽEBŘÍČEK']] },
+  middle: { tiles: ['O', 'U'], total: 2, name: 'Uprostřed', rule: 'Dvojice písmen může být kdekoliv ve slově. Každý hráč má 90 sekund a správné slovo mu čas prodlužuje.', ex: ['houba', 'soud', 'koupě'], facts: [['90 s', 'ČAS'], ['1 : 1', 'DUEL'], ['ELO', 'ŽEBŘÍČEK']] },
+  br:     { tiles: ['👑'], total: 1, name: 'Royale', rule: 'Až 5 hráčů, vyhrává poslední, kdo zbude. Čas na tah se každé kolo zkracuje.', ex: [], facts: [['2–5', 'HRÁČŮ'], ['10–30 s', 'NA TAH'], ['1', 'VÍTĚZ']] },
+};
+function modeHeroHtml(m) {
+  const h = MODE_HERO[m];
+  const tiles = h.tiles.map(t => `<span class="mh-tile">${t}</span>`).join('') + Array.from({ length: Math.max(0, 4 - h.tiles.length) }, () => '<span class="mh-tile empty">…</span>').join('');
+  const facts = (m === 'br' ? [['2–5', 'HRÁČŮ'], ['10–30 s', 'NA TAH'], ['1', 'VÍTĚZ']] : h.facts).map(f => `<div><b>${f[0]}</b><small>${f[1]}</small></div>`).join('');
+  return `<div class="mh-tiles">${tiles}</div>
+    <div class="mh-name">${h.name}</div>
+    <p class="mh-rule">${h.rule}</p>
+    ${h.ex.length ? `<div class="mh-ex">Třeba: ${h.ex.map(w => `<span>${w}</span>`).join(' · ')}</div>` : ''}
+    <div class="mh-facts">${facts}</div>`;
+}
+
 function renderPlayMenu(notice) {
   clearInterval(menuTimer);
   app.innerHTML = `
-    <div class="page play-full">
+    <div class="page play-full pm-b">
     <div class="card">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
       <button type="button" class="back-link" id="playBackBtn">‹ Zpět</button>
       <h1 class="play-title">Hrát online</h1>
-      <div class="divider"><span class="line"></span><span class="diamond">◇</span><span class="line"></span></div>
 
       <div class="mode-select">
         ${modeSegmentedHtml(selectedMode, true)}
       </div>
       <div class="error" id="err">${notice || ''}</div>
 
-      <div class="or-sep"><span class="line"></span><span>hrát proti náhodnému hráči</span><span class="line"></span></div>
+      <div class="mode-hero" id="modeHero">${modeHeroHtml(selectedMode)}</div>
 
-      <div class="menu-list">
-        <button class="menu-item" id="findBtn"><span class="ic">🔎</span><span>Najít soupeře</span></button>
-      </div>
+      <button class="menu-item" id="findBtn"><span class="ic">🔎</span><span>Najít soupeře</span><small id="findSub"></small></button>
 
-      <div class="or-sep"><span class="line"></span><span>nebo hraj jen s kamarádem</span><span class="line"></span></div>
-
-      <div class="menu-list">
-        <button class="menu-item" id="createLobbyBtn"><span class="ic">＋</span><span>Vytvořit lobby</span></button>
+      <div class="pm-row">
+        <button type="button" class="pm-sec" id="createLobbyBtn"><span>＋</span> Lobby</button>
+        <button type="button" class="pm-sec" id="codeToggle" aria-expanded="false"><span>🔑</span> Mám kód</button>
       </div>
-      <div class="opt-stack">
-      <div class="custom-pat" id="customPatRow">
-        <label for="customPat">Vlastní zadání <small>(nepovinné)</small></label>
-        <input id="customPat" maxlength="2" placeholder="např. úč" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" />
-        <div class="custom-pat-hint" id="customPatHint">Dvě písmena, na která budete hrát. Prázdné pole = náhodné zadání.</div>
-      </div>
-      <div class="custom-pat br-time" id="brTimeRow">
-        <label>Čas na odpověď <small>(v prvním kole)</small></label>
-        <div class="time-chips" id="brTimeChips" role="radiogroup" aria-label="Čas na odpověď">
-          ${BR_TURN_CHOICES.map(s => `<button type="button" class="time-chip${s === brTurnSec ? ' on' : ''}" data-s="${s}" role="radio" aria-checked="${s === brTurnSec}">${s} s${s === 15 ? '<i>výchozí</i>' : ''}</button>`).join('')}
-        </div>
-        <div class="custom-pat-hint">Každé kolo se čas zkracuje o 1 s (minimum 5 s). Platí pro hru s kamarády.</div>
-      </div>
-      </div>
-      <div class="lobby-row">
+      <div class="lobby-row" id="lobbyRow" hidden>
         <div class="code-boxes" id="joinCodeBoxes">
           ${[0, 1, 2, 3, 4].map(i => `<input class="code-box" data-idx="${i}" maxlength="1" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" inputmode="text" />`).join('')}
         </div>
@@ -921,30 +935,24 @@ function renderPlayMenu(notice) {
     </div>
     </div>
   `;
+  socket.emit('get_online', (n) => {
+    const el = document.getElementById('findSub');
+    if (el && typeof n === 'number') el.textContent = onlineText(n).toUpperCase();
+  });
+  document.getElementById('codeToggle').onclick = (e) => {
+    const row = document.getElementById('lobbyRow');
+    row.hidden = !row.hidden;
+    e.currentTarget.setAttribute('aria-expanded', String(!row.hidden));
+    e.currentTarget.classList.toggle('on', !row.hidden);
+    if (!row.hidden) { const f = row.querySelector('.code-box'); if (f) f.focus(); }
+  };
 
   document.getElementById('soundBtn').onclick = toggleSound;
   document.getElementById('playBackBtn').onclick = () => renderMenu();
   const updateCustomPat = () => {
-    // Řádek zůstává v layoutu pořád (jen se skryje), ať se při přepínání režimů nemění výška okna.
-    const row = document.getElementById('customPatRow');
-    const inp = document.getElementById('customPat');
-    const hint = document.getElementById('customPatHint');
-    if (!row || !inp) return;
-    const one = selectedMode === 'speed';
-    row.style.visibility = selectedMode === 'br' ? 'hidden' : 'visible';
-    const tr = document.getElementById('brTimeRow');
-    if (tr) tr.style.visibility = selectedMode === 'br' ? 'visible' : 'hidden';
-    inp.maxLength = one ? 1 : 2;
-    inp.placeholder = one ? 'např. p' : (selectedMode === 'middle' ? 'např. ou' : 'např. úč');
-    if ([...inp.value].length > inp.maxLength) inp.value = '';
-    hint.textContent = (one ? 'Jedno písmeno, na které budete hrát.' : 'Dvě písmena, na která budete hrát.') + ' Prázdné pole = náhodné zadání.';
+    const hero = document.getElementById('modeHero');
+    if (hero) hero.innerHTML = modeHeroHtml(selectedMode);
   };
-  document.querySelectorAll('#brTimeChips .time-chip').forEach(btn => btn.onclick = () => {
-    brTurnSec = Number(btn.dataset.s);
-    try { localStorage.setItem('dopisto_br_turn', String(brTurnSec)); } catch {}
-    document.querySelectorAll('#brTimeChips .time-chip').forEach(b => { const on = b === btn; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
-    vibrate(8);
-  });
   bindModeSegmented(() => selectedMode, (newMode) => { selectedMode = newMode; updateCustomPat(); if (newMode === 'br') loadBr().catch(() => {}); });
   updateCustomPat();
   if (selectedMode === 'br') loadBr().catch(() => {});
@@ -958,20 +966,10 @@ function renderPlayMenu(notice) {
   };
 
   document.getElementById('createLobbyBtn').onclick = () => {
-    const n = requireNick(); if (!n) return;
+    if (!requireNick()) return;
     ensureAudioCtx();
-    if (selectedMode === 'br') { withBr(document.getElementById('createLobbyBtn'), () => { brScreen = 'joining'; socket.emit('br_create_lobby', { nickname: n, turnSec: brTurnSec }); renderBrWait('Vytvářím lobby…'); }); return; }
-    let pattern = '';
-    if (selectedMode === 2 || selectedMode === 'middle' || selectedMode === 'speed') {
-      pattern = (document.getElementById('customPat').value || '').trim().toLowerCase();
-      const need = selectedMode === 'speed' ? 1 : 2;
-      if (pattern && [...pattern].length !== need) {
-        document.getElementById('err').textContent = need === 1 ? 'Vlastní zadání musí být přesně jedno písmeno.' : 'Vlastní zadání musí mít přesně dvě písmena.';
-        return;
-      }
-    }
-    socket.emit('create_lobby', { nickname: n, mode: selectedMode, pattern });
-    renderLobbyWaiting();
+    if (selectedMode === 'br') loadBr().catch(() => {});
+    renderLobbySetup();
   };
 
   document.getElementById('joinLobbyBtn').onclick = () => {
@@ -988,6 +986,53 @@ function renderPlayMenu(notice) {
   setupCodeBoxes();
 }
 
+
+// ==== Nastavení lobby před vytvořením ====
+function renderLobbySetup(notice) {
+  const m = selectedMode;
+  const one = m === 'speed';
+  app.innerHTML = `
+    <div class="page"><div class="card mid lobby-setup">
+      <button type="button" class="back-link" id="lsBack">‹ Zpět</button>
+      <h1 class="play-title">Nové lobby</h1>
+      <div class="ls-mode">${MODE_LABEL[m]}</div>
+      <div class="error" id="err">${notice || ''}</div>
+      ${m === 'br' ? `
+      <div class="custom-pat br-time">
+        <label>Čas na odpověď <small>(v prvním kole)</small></label>
+        <div class="time-chips" id="brTimeChips" role="radiogroup" aria-label="Čas na odpověď">
+          ${BR_TURN_CHOICES.map(s => `<button type="button" class="time-chip${s === brTurnSec ? ' on' : ''}" data-s="${s}" role="radio" aria-checked="${s === brTurnSec}">${s} s${s === 15 ? '<i>výchozí</i>' : ''}</button>`).join('')}
+        </div>
+        <div class="custom-pat-hint">Každé kolo se čas zkracuje o 1 s (minimum 5 s).</div>
+      </div>` : `
+      <div class="custom-pat">
+        <label for="customPat">Vlastní zadání <small>(nepovinné)</small></label>
+        <input id="customPat" maxlength="${one ? 1 : 2}" placeholder="${one ? 'např. p' : (m === 'middle' ? 'např. ou' : 'např. úč')}" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" />
+        <div class="custom-pat-hint">${one ? 'Jedno písmeno' : 'Dvě písmena'}, na ${one ? 'které' : 'která'} budete hrát. Prázdné pole = náhodné zadání.</div>
+      </div>`}
+      <button class="menu-item" id="lsCreate"><span class="ic">＋</span><span>Vytvořit lobby</span></button>
+    </div></div>`;
+  document.getElementById('lsBack').onclick = () => renderPlayMenu();
+  document.querySelectorAll('#brTimeChips .time-chip').forEach(btn => btn.onclick = () => {
+    brTurnSec = Number(btn.dataset.s);
+    try { localStorage.setItem('dopisto_br_turn', String(brTurnSec)); } catch {}
+    document.querySelectorAll('#brTimeChips .time-chip').forEach(b => { const on = b === btn; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+    vibrate(8);
+  });
+  document.getElementById('lsCreate').onclick = () => {
+    const n = requireNick(); if (!n) return;
+    ensureAudioCtx();
+    if (m === 'br') { withBr(document.getElementById('lsCreate'), () => { brScreen = 'joining'; socket.emit('br_create_lobby', { nickname: n, turnSec: brTurnSec }); renderBrWait('Vytvářím lobby…'); }); return; }
+    const pattern = (document.getElementById('customPat').value || '').trim().toLowerCase();
+    const need = one ? 1 : 2;
+    if (pattern && [...pattern].length !== need) {
+      document.getElementById('err').textContent = need === 1 ? 'Vlastní zadání musí být přesně jedno písmeno.' : 'Vlastní zadání musí mít přesně dvě písmena.';
+      return;
+    }
+    socket.emit('create_lobby', { nickname: n, mode: m, pattern });
+    renderLobbyWaiting();
+  };
+}
 
 // ==== Informační stránky (patička menu) ====
 const SITE = window.SITE || {};
@@ -1261,7 +1306,7 @@ function renderDailyReveal(data) {
   app.innerHTML = `
     <div class="card">
       <div class="countdown-label">🔥 Denní výzva</div>
-      ${patternTilesHtml(data.pattern, 'reveal')}
+      ${taskCardHtml(data.pattern, 'l', { sub: '180 s · zadání je dnes stejné pro všechny' })}
       ${dailyBonusChipHtml(data.dailyBonus)}
       <div class="countdown-num" id="countNum">3</div>
     </div>
@@ -1297,9 +1342,8 @@ function renderDailyGame() {
   app.innerHTML = `
     <div class="card fit">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
-      ${patternTilesHtml(dailyState.pattern)}
+      ${taskCardHtml(dailyState.pattern, 'm', { count: 0 })}
       ${dailyBonusChipHtml(dailyState.dailyBonus, 'gameBonusChip')}
-      <div class="used-count" id="usedCount">${patternInstruction(dailyState.pattern)} · Slov: 0</div>
       <div class="clocks">
         <div class="clock active" id="clockMe"><div class="name">${esc(dailyState.myName)}</div><div class="time">${fmtTime(dailyState.timeLeft)}</div></div>
       </div>
@@ -1460,9 +1504,26 @@ function loadExtra() {
   return extraLoadP;
 }
 
+// Profil délek slov (3, 4, 5, 6, 7, 8+) — pro sdílení se skrytými slovy.
+function wordLengthProfile(words) {
+  const counts = [0, 0, 0, 0, 0, 0];
+  let longest = 0;
+  for (const w of words || []) {
+    const len = [...String(w)].length;
+    if (len > longest) longest = len;
+    counts[Math.min(5, Math.max(0, len - 3))]++;
+  }
+  return { counts, longest };
+}
 function dailyShareText(data) {
   const n = currentStreak();
   const d = new Date().toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' });
+  if (readDailyHide() && data.words && data.words.length) {
+    const { counts, longest } = wordLengthProfile(data.words);
+    const max = Math.max(...counts, 1);
+    const spark = counts.map(c => '▁▂▃▄▅▆▇█'[Math.min(7, Math.round((c / max) * 7))]).join('');
+    return `Dopišto ${d}: ${data.wordCount} slov za 180 s${n > 1 ? ` · 🔥 ${n} dní v řadě` : ''}\nNejdelší slovo: ${longest} písmen ${spark}\nDokážeš víc? ${location.origin}`;
+  }
   return `Dopišto ${d}: ${data.wordCount} slov za 180 s${n > 1 ? ` · 🔥 ${n} dní v řadě` : ''}. Dokážeš víc? ${location.origin}`;
 }
 function shareDailyResult(data) {
@@ -1553,7 +1614,8 @@ let currentLobbyCode = null;
 function renderLobbyWaiting() {
   app.innerHTML = `
     <div class="card mid" style="text-align:center">
-      <p style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:0">Režim: ${MODE_LABEL[selectedMode]}<span id="lobbyPatLine"></span></p>
+      <p style="color:var(--muted); font-size:12px; letter-spacing:1px; margin-bottom:0">Režim: ${MODE_LABEL[selectedMode]}</p>
+      <div id="lobbyTask"></div>
       <div class="spinner"></div>
       <p style="color:var(--ink-soft); font-size:13px; margin-bottom:0">Čekání na soupeře…</p>
       <div class="lobby-code" id="lobbyCodeNum">·····</div>
@@ -1631,7 +1693,7 @@ function renderRevealCountdown(data) {
       </div>
       <div class="turn-preview">Začíná: <span>${esc(startingName)}</span></div>
       <div class="countdown-label">Zadání kola</div>
-      ${patternDisplayBlock(data.pattern, 'reveal')}
+      ${taskCardHtml(data.pattern, 'l', { sub: MODE_LABEL[game.mode] || '' })}
       <div class="countdown-num" id="countNum">3</div>
     </div>
   `;
@@ -1994,14 +2056,13 @@ function renderGame() {
   app.innerHTML = `
     <div class="card game-card fit">
       <button class="icon-btn sound-toggle" id="soundBtn">${soundIconHtml()}</button>
-      ${patternDisplayBlock(game.pattern)}
+      ${taskCardHtml(game.pattern, 'm', { count: 0 })}
       ${dailyBonusChipHtml(game.dailyBonus, 'gameBonusChip')}
       ${clocksHtml}
       ${turnTimerHtml}
       <div class="turn-status" id="turnStatus"></div>
       <div class="last-word" id="lastWordBanner"></div>
       ${wordInputHtml(currentPlaceholder())}
-      <div class="used-count" id="usedCount">${currentInstructionText()} · Slov: 0</div>
       <div class="game-footer">
         <div class="reaction-bar" id="reactionBar">
           ${REACTIONS.map(e => `<button class="reaction-btn" data-emoji="${e}">${e}</button>`).join('')}
@@ -2178,7 +2239,8 @@ function renderResult(data) {
     <div class="card result">
       <button type="button" class="report-icon" id="reportOpenBtn" aria-label="Nahlásit hráče" title="Nahlásit hráče">!</button>
       <h2 class="${iWon ? 'win' : 'lose'}">${iWon ? 'Vyhrál(a) jsi!' : 'Prohrál(a) jsi'}</h2>
-      <div style="color:var(--muted); font-size:13px">${reasonText} <span>(režim: ${MODE_LABEL[game.mode]})</span></div>
+      <div style="color:var(--muted); font-size:13px">${reasonText}</div>
+      ${game.pattern ? taskCardHtml(game.pattern, 's', { label: MODE_LABEL[game.mode] }) : `<div style="color:var(--muted); font-size:12px">Režim: ${MODE_LABEL[game.mode]}</div>`}
       <div class="row" style="margin-top:16px">
         <div>
           <div style="color:var(--muted); font-size:12px; letter-spacing:1px; text-transform:uppercase">${esc(my.name)}</div>
@@ -2374,8 +2436,12 @@ socket.on('waiting_for_opponent', () => { /* obrazovka hledání se už zobrazuj
 
 socket.on('lobby_created', ({ code, pattern }) => {
   currentLobbyCode = code;
-  const pl = document.getElementById('lobbyPatLine');
-  if (pl && pattern) pl.innerHTML = ` · zadání <b style="color:var(--accent)">${esc(pattern.toUpperCase())}</b>`;
+  const lt = document.getElementById('lobbyTask');
+  if (lt) {
+    lt.innerHTML = pattern
+      ? taskCardHtml({ type: selectedMode === 'middle' ? 'infix2' : 'prefix2', value: pattern }, 'l', { cls: 'tc-lobby', sub: 'vlastní zadání lobby' })
+      : `<div class="tc tc-l tc-lobby"><div class="letter-tiles"><div class="letter-tile mystery">?</div><div class="letter-tile mystery">?</div><div class="letter-tile dim">···</div></div><div class="tc-rule">Náhodné zadání<small>odhalí se při startu</small></div></div>`;
+  }
   const el = document.getElementById('lobbyCodeNum');
   if (el) el.textContent = code;
 });
@@ -2432,8 +2498,7 @@ socket.on('daily_state_update', (data) => {
     if (gameErr) gameErr.textContent = '';
     inputFeedback('ok'); vibrate(15);
 
-    const usedCount = document.getElementById('usedCount');
-    if (usedCount) usedCount.textContent = `${patternInstruction(dailyState.pattern)} · Slov: ${data.usedWordsCount}`;
+    setUsedCount(data.usedWordsCount);
 
     const lastWordBanner = document.getElementById('lastWordBanner');
     if (lastWordBanner) {
@@ -2545,8 +2610,7 @@ socket.on('state_update', (data) => {
     if (data.lastPlayerIdx === game.youAre) { inputFeedback('ok'); vibrate(15); }
     else { vibrate(35); const wi = document.getElementById('wordInput'); if (wi && document.activeElement !== wi) wi.focus(); }
 
-    const usedCount = document.getElementById('usedCount');
-    if (usedCount) usedCount.textContent = `${currentInstructionText()} · Slov: ${data.usedWordsCount}`;
+    setUsedCount(data.usedWordsCount);
 
     const wordInputEl = document.getElementById('wordInput');
 

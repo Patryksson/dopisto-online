@@ -148,7 +148,10 @@
   function place(ids, left) {
     const card = document.querySelector('.card');
     if (!card) return;
-    const r = card.getBoundingClientRect();
+    // Poloha bez ohledu na probíhající animaci karty (transform by panely posadil na přechodné místo).
+    let ox = 0, oy = 0;
+    for (let e = card; e; e = e.offsetParent) { ox += e.offsetLeft; oy += e.offsetTop; }
+    const r = { left: ox, right: ox + card.offsetWidth, top: oy - window.scrollY };
     const x = left ? r.left - GAP - PANEL_W : r.right + GAP;
     const fits = left ? x >= PAD : x + PANEL_W <= window.innerWidth - PAD;
     let y = r.top + 10;
@@ -167,7 +170,8 @@
   // změna velikosti okna se řeší hned.
   let lastSync = 0, syncT = 0;
   function schedule(now) {
-    if (raf || syncT) return;
+    if (now === true) { if (syncT) { clearTimeout(syncT); syncT = 0; } if (raf) return; }
+    else if (raf || syncT) return;
     const wait = now === true ? 0 : Math.max(0, 200 - (Date.now() - lastSync));
     const run = () => { syncT = 0; raf = requestAnimationFrame(() => { raf = 0; lastSync = Date.now(); sync(); }); };
     if (wait) syncT = setTimeout(run, wait); else run();
@@ -184,13 +188,33 @@
     Object.keys(panels).forEach(id => { if (![...layout.left, ...layout.right].includes(id)) panels[id].hidden = true; });
     place(layout.left, true);
     place(layout.right, false);
+    watchCard();
+    if (swapping) {   // panely naběhnou, až se rozměr karty ustálí (data z menu dorážejí se zpožděním)
+      clearTimeout(unswapT);
+      unswapT = setTimeout(() => { swapping = false; Object.values(panels).forEach(p => p.classList.remove('swap')); }, 160);
+    }
   }
+  let unswapT = 0, watched = null, cardRO = null;
+  function watchCard() {
+    const card = document.querySelector('.card');
+    if (card === watched || !window.ResizeObserver) return;
+    if (cardRO) cardRO.disconnect();
+    watched = card;
+    if (card) { cardRO = new ResizeObserver(() => schedule(true)); cardRO.observe(card); }
+  }
+  // Při výměně obrazovky se panely na chvíli schovají a po usazení na správné místo jemně naběhnou (nic neskáče).
+  let swapping = false;
+  function beginSwap() { swapping = true; Object.values(panels).forEach(p => p.classList.add('swap')); schedule(true); }
 
   const appEl = document.getElementById('app');
   // Panely se překreslují jen při přidání/odebrání prvků (ne při každém tiknutí odpočtu, které mění jen text);
   // pro jistotu navíc jednou za sekundu, dokud je karta vidět (setHtml nic nepřepisuje, když se obsah nezměnil).
   const hasElement = (list) => { for (const n of list) if (n.nodeType === 1) return true; return false; };
-  if (appEl) new MutationObserver((recs) => { for (const r of recs) if (hasElement(r.addedNodes) || hasElement(r.removedNodes)) { schedule(); return; } }).observe(appEl, { childList: true, subtree: true });
+  const isPage = (list) => { for (const n of list) if (n.nodeType === 1 && n.classList.contains('page')) return true; return false; };
+  if (appEl) new MutationObserver((recs) => {
+    for (const r of recs) if (r.target === appEl && isPage(r.addedNodes)) { beginSwap(); return; }
+    for (const r of recs) if (hasElement(r.addedNodes) || hasElement(r.removedNodes)) { schedule(); return; }
+  }).observe(appEl, { childList: true, subtree: true });
   setInterval(() => { if (!document.hidden) schedule(); }, 1000);
   window.addEventListener('resize', () => schedule(true));
   mqPointer.addEventListener && mqPointer.addEventListener('change', () => schedule(true));

@@ -47,9 +47,7 @@ function renderWeekly(data, notice) {
         <span class="wk-title">🏆 Týdenní výzva</span>
         <span class="wk-timer" id="wkClock"></span>
       </div>
-      <div class="letter-tiles">${data.pattern.tiles.map(t => `<div class="letter-tile ${t.k}">${esc(t.t)}</div>`).join('')}</div>
-      ${data.pattern.sub ? `<div class="wk-sub">${esc(data.pattern.sub)}</div>` : ''}
-      <div class="used-count" id="wkInstr">${esc(data.pattern.hint)}</div>
+      ${taskCardHtml(data.pattern, 'm', { cls: 'tc-weekly', rule: data.pattern.hint, sub: data.pattern.sub || '', tilesHtml: `<div class="letter-tiles">${data.pattern.tiles.map(t => `<div class="letter-tile ${t.k}">${esc(t.t)}</div>`).join('')}</div>` })}
       <div class="wk-stats" id="wkStats">${weeklyStatsHtml()}</div>
       ${wordInputHtml(data.pattern.placeholder)}
       <div class="wk-actions">

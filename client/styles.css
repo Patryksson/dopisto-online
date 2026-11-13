@@ -925,7 +925,7 @@ body.has-vk .br-spectate{margin:0 0 4px}
   .sheet-body .rules-body { max-height: none; }
   @media (prefers-reduced-motion: reduce) { .sheet-box { animation: none; } }
   /* bílé tečky okolo červených plných tlačítek (sedí k mřížce) */
-  #playBtn, #findBtn, #dailyBtn, .nick-ok { outline: 1.5px dotted rgba(255,255,255,.5); outline-offset: 3px; }
+  #playBtn, #findBtn, #dailyBtn, .nick-ok { outline: none; }
   /* ---- napětí, rozpad, koruna, směr ---- */
   body.danger::after { background: radial-gradient(ellipse at center, transparent 55%, rgba(255,59,48,.55)); will-change: opacity; animation: dangerPulse .5s ease-in-out infinite alternate; }
   @keyframes dangerPulse { from { opacity: .55; } to { opacity: 1; } }
@@ -1014,8 +1014,6 @@ body.has-vk .br-spectate{margin:0 0 4px}
 .br-head{padding-right:48px;letter-spacing:.06em;gap:6px}
 
 /* Royale: výběr času na odpověď – stejné místo jako „Vlastní zadání" u ostatních režimů */
-.opt-stack{display:grid}
-.opt-stack>.custom-pat{grid-area:1/1}
 .time-chips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px}
 .time-chip{width:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:10px 4px;font-size:14px;letter-spacing:.04em;text-transform:none;border-radius:var(--r-md);background:rgba(8,8,13,.86);border:1px dashed rgba(255,255,255,.22);color:var(--ink-soft)}
 .time-chip i{font-style:normal;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
@@ -1180,18 +1178,13 @@ body.desk-duel .game-card .feed{display:none}
   @supports (height: 100dvh) { .page.play-full { min-height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); } }
   .page.play-full .card { flex: 1 1 auto; display: flex; flex-direction: column; overflow: hidden; padding: clamp(10px, 1.6vh, 16px) 20px clamp(10px, 1.6vh, 18px); }
   .page.play-full .play-title { margin-top: clamp(0px, .6vh, 6px); }
-  .page.play-full .divider { margin: 2px auto clamp(2px, 1.6vh, 14px); }
   .page.play-full .mode-select { margin-top: clamp(0px, 1vh, 10px); }
   .page.play-full .error { margin: 0; min-height: 12px; }
-  .page.play-full .or-sep { margin-top: auto; margin-bottom: clamp(4px, 1.4vh, 12px); }
   .page.play-full .menu-item { padding-top: clamp(9px, 1.9vh, 14px); padding-bottom: clamp(9px, 1.9vh, 14px); }
-  .page.play-full .opt-stack { margin-top: clamp(2px, 1vh, 10px); }
-  .page.play-full .lobby-row { margin-top: auto; }
   .page.play-full .seg-btn { flex: 1 1 auto; white-space: nowrap; letter-spacing: .3px; padding-left: 5px; padding-right: 5px; font-size: clamp(9.5px, 2.9vw, 12px); }
 }
 /* nižší telefony: vypustí se ukázky a vysvětlivky, ať se vše vejde bez posunu */
 @media (max-width: 600px) and (max-height: 700px) {
-  .page.play-full .custom-pat-hint { display: none; }
   .page.play-full .mode-preview-row { display: none; }
 }
 @media (max-width: 600px) and (max-height: 640px) {
@@ -1301,7 +1294,7 @@ body.desk-duel .game-card .feed{display:none}
 .xm-snow{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
 .xm-ico{display:inline-block;vertical-align:-3px;width:14px;height:16px;margin-right:2px}
 /* barvy menu: červená + zelená záře, zlaté rámečky, zelená denní výzva */
-.xmas body:has(.page.home){background:
+.xmas body:not(.br-live){background:
   radial-gradient(60% 34% at 50% 5%, rgba(255,59,48,.26), transparent 70%),
   radial-gradient(75% 40% at 50% 100%, rgba(38,190,110,.20), transparent 70%),
   linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px) 0 0 / 34px 34px,
@@ -1310,7 +1303,7 @@ body.desk-duel .game-card .feed{display:none}
 .xmas .bonus-card.slim,.xmas .stats-card{border-color:rgba(255,201,60,.55);background:linear-gradient(180deg,rgba(255,201,60,.06),rgba(255,201,60,.01))}
 .xmas .bonus-card.slim .bc-main{color:#ffd98a}
 .xmas .page.home .daily-card:not(.weekly-card){border-color:rgba(46,196,120,.65);background:linear-gradient(180deg,rgba(46,196,120,.10),rgba(46,196,120,0))}
-.xmas #dailyBtn{background:linear-gradient(180deg,#34c97f,#1a9a5a);border-color:#7be0ae;outline-color:rgba(255,255,255,.5);box-shadow:none}
+.xmas #dailyBtn{background:linear-gradient(180deg,#34c97f,#1a9a5a);border-color:#7be0ae;box-shadow:none}
 .xmas #dailyBtn:hover{box-shadow:0 10px 26px rgba(46,196,120,.5)}
 .xmas .page.home .nick-chip,.xmas .page.home .sound-toggle{top:46px}
 .xmas .page.home .tagline{color:#ffd98a}
@@ -1329,14 +1322,13 @@ body.desk-duel .game-card .feed{display:none}
 /* sníh přes horní okraj „Hrát online“ (obrázek od uživatele) */
 .xm-snowcap{display:none}
 .xmas #playBtn{position:relative;overflow:visible}
-.xmas .xm-snowcap{display:block;position:absolute;left:-1px;right:-1px;top:-19px;width:calc(100% + 2px);height:35px;object-fit:fill;pointer-events:none;user-select:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+.xmas .xm-snowcap{display:block;position:absolute;left:-3px;right:-3px;top:-11px;width:calc(100% + 6px);height:30px;object-fit:fill;pointer-events:none;user-select:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
 .xmas .weekly-card .cs-pat .lk{color:#8fdcff}
 .xmas .weekly-card .cs-pat,.xmas .weekly-card .cs-pat .big{color:#cfeeff}
 
 /* sněhová vrstva na spodku karty, pod záložkami */
 .xm-drift{display:none}
-.xmas .page.home .card{padding-bottom:calc(12px + 14px)}
-.xmas .xm-drift{display:block;position:absolute;left:1px;right:1px;bottom:1px;height:20px;pointer-events:none;border-radius:0 0 13px 13px;overflow:hidden}
+.xmas .xm-drift{display:block;position:absolute;left:1px;right:1px;bottom:1px;height:14px;pointer-events:none;border-radius:0 0 13px 13px;overflow:hidden}
 .xmas .xm-drift svg{display:block;width:100%;height:100%;filter:drop-shadow(0 -1px 2px rgba(150,210,255,.25))}
 
 /* šetření: skrytá karta = animace stojí; „omezit pohyb“ vypne nekonečné animace všude */
@@ -1354,3 +1346,81 @@ body.desk-duel .game-card .feed{display:none}
   .page.home .tab{padding-top:3px;padding-bottom:0}
   .page.home .site-footer{margin-top:2px}
 }
+
+/* panely na PC: při výměně obrazovky se schovají a naběhnou fadem */
+.side{transition:opacity .28s ease-out}
+.side.swap{opacity:0;transition:none}
+
+/* ===== Hrát online – varianta B (ukázka režimu) ===== */
+.pm-b .card{display:flex;flex-direction:column}
+.pm-b .mode-preview-row,.pm-b .divider,.pm-b .or-sep{display:none}
+.pm-b .mode-select{margin-top:2px}
+.pm-b .mode-hero{flex:1 1 auto;min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(6px,1.4vh,12px);margin:8px 0 10px;padding:12px 10px;border:1px dashed var(--dashline);border-radius:14px;background:radial-gradient(ellipse at 50% 0,rgba(255,59,48,.14),transparent 70%),var(--paper-2);text-align:center;overflow:hidden}
+.pm-b .mh-tiles{display:flex;gap:8px}
+.pm-b .mh-tile{width:clamp(40px,12vw,56px);height:clamp(46px,14vw,64px);display:flex;align-items:center;justify-content:center;font-size:clamp(22px,7vw,32px);font-weight:800;color:#fff;background:#0d0f14;border:1px solid var(--line);border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.pm-b .mh-tile.empty{border-style:dashed;color:var(--muted);font-size:18px;background:transparent;box-shadow:none}
+.pm-b .mh-name{font-size:15px;font-weight:800;letter-spacing:4px;text-transform:uppercase}
+.pm-b .mh-rule{margin:0;font-size:12.5px;line-height:1.45;color:var(--muted);max-width:30em}
+.pm-b .mh-ex{font-size:12px;color:var(--muted)}
+.pm-b .mh-ex span{color:#ffc83a}
+.pm-b .mh-facts{display:flex;gap:8px;width:100%;margin-top:2px}
+.pm-b .mh-facts>div{flex:1;border:1px dashed var(--dashline);border-radius:8px;padding:6px 2px;display:flex;flex-direction:column;gap:2px}
+.pm-b .mh-facts b{font-size:15px;color:#fff}
+.pm-b .mh-facts small{font-size:9px;letter-spacing:1.5px;color:var(--muted)}
+.pm-b #findBtn{flex:0 0 auto;flex-direction:column;justify-content:center;align-items:center;gap:0;text-align:center;padding-top:12px;padding-bottom:12px;letter-spacing:3px;text-transform:uppercase}
+.pm-b #findBtn>span{display:inline}
+.pm-b #findBtn small{display:block;font-size:10px;letter-spacing:2px;font-weight:500;opacity:.85;min-height:12px}
+.pm-b .pm-row{display:flex;gap:8px;margin-top:8px}
+.pm-b .pm-sec{flex:1;width:auto;padding:11px 6px;background:var(--paper-2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line);border:1px dashed var(--dashline);border-radius:10px;font-size:12px;letter-spacing:2px;text-transform:uppercase;cursor:pointer}
+.pm-b .pm-sec.on{border-color:var(--accent);color:var(--accent)}
+.pm-b .lobby-row{margin-top:8px}
+.pm-b .lobby-row[hidden]{display:none}
+.pm-b .opt-slot{margin-top:8px}
+.pm-b .pm-fold{border:1px dashed var(--dashline);border-radius:10px;background:var(--paper-2)}
+.pm-b .pm-fold-head{width:100%;display:flex;justify-content:space-between;align-items:center;background:none;border:0;color:var(--muted);padding:10px 12px;font-size:12px;letter-spacing:1px;cursor:pointer;box-shadow:none}
+.pm-b .pm-fold-head small{letter-spacing:0}
+.pm-b .pm-fold-body{display:none;padding:0 12px 10px}
+.pm-b .pm-fold.open .pm-fold-body{display:block}
+.pm-b .pm-fold.open .pm-fold-head i{transform:rotate(180deg)}
+.pm-b .pm-fold input{width:100%;box-sizing:border-box;text-align:center;font-size:20px;letter-spacing:6px;text-transform:uppercase;padding:8px}
+.pm-b .br-time{margin:0}
+@media (max-width:600px){
+  .page.play-full.pm-b .menu-item{padding-top:12px;padding-bottom:12px}
+}
+@media (max-height:700px){.pm-b .mh-rule{font-size:11.5px}.pm-b .mh-tile{height:42px;width:38px;font-size:20px}.pm-b .mh-ex{display:none}}
+@media (min-width:601px){.pm-b .mode-hero{min-height:260px}}
+.pm-b #findBtn{flex-direction:row;flex-wrap:wrap;gap:0 8px}
+.pm-b #findBtn small{flex:0 0 100%;text-align:center}
+.pm-b .mh-rule{text-transform:none;letter-spacing:0}
+@media (min-width:601px){.pm-b .card{min-height:min(720px,88vh)}}
+
+/* ===== Jednotná karta zadání (.tc) ===== */
+.tc{border:1px dashed var(--dashline);border-radius:14px;background:radial-gradient(ellipse at 50% 0,rgba(255,59,48,.12),transparent 70%),var(--paper-2);text-align:center;box-sizing:border-box}
+.tc .letter-tiles{margin:0}
+.tc-rule{color:var(--ink-soft,#c9ccd6);font-size:12px;line-height:1.4}
+.tc-rule small{display:block;margin-top:2px;font-size:10.5px;color:var(--muted);letter-spacing:.3px}
+.tc-l{padding:14px 12px;margin:4px 0 6px}
+.tc-l .tc-rule{margin-top:10px}
+.tc-m{display:flex;align-items:center;gap:10px;padding:8px 12px;text-align:left;margin:2px 0 8px}
+.tc-m .letter-tiles{flex:0 0 auto;flex-wrap:nowrap;gap:4px}
+.tc-m .letter-tile{width:32px;height:38px;font-size:18px}
+.tc-m .tc-rule{flex:1;min-width:0}
+.tc-cnt{font-size:10px;color:var(--muted);text-align:right;line-height:1.25;letter-spacing:.5px}
+.tc-cnt b{display:block;font-size:19px;color:#fff;letter-spacing:0}
+.tc-s{display:inline-flex;align-items:center;gap:8px;padding:5px 10px;border-radius:20px;margin:8px 0 2px}
+.tc-s .letter-tiles{gap:3px;flex-wrap:nowrap}
+.tc-s .letter-tile{width:24px;height:28px;font-size:14px;border-width:1px;border-radius:6px}
+.tc-s .letter-tile.dim{font-size:11px;width:auto;padding:0 5px}
+.tc-lab{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.tc-weekly{border-color:rgba(255,176,46,.45);background:radial-gradient(ellipse at 50% 0,rgba(255,176,46,.12),transparent 70%),var(--paper-2)}
+.tc-weekly .tc-rule small{color:#ffb02e}
+.card.fit .tc .letter-tile,body.has-vk .card.fit .tc .letter-tile{height:38px}
+.card.fit .tc-m .letter-tile,body.has-vk .card.fit .tc-m .letter-tile{width:32px;height:38px;font-size:18px}
+.card.fit .tc-l .letter-tile,.tc-lobby .letter-tile{width:48px;height:58px;font-size:26px}
+.tc-l .letter-tile{width:48px;height:58px;font-size:26px}
+.tc-l .letter-tile.dim{width:auto;min-width:48px;font-size:16px}
+body.desk-duel .game-card .tc-m .letter-tile{width:44px;height:52px;font-size:24px;border-radius:8px}
+body.desk-duel .game-card .tc-m .tc-rule{font-size:13px}
+.weekly-screen .tc-weekly .letter-tile.hl{border-color:#ffb02e;color:#ffd98a}
+@media (max-width:600px) and (max-height:700px){.tc-l{padding:10px}.tc-l .letter-tile{width:40px;height:48px;font-size:22px}.tc-rule small{display:none}}
+.card.fit .tc-m:not(.tc-weekly),body.desk-duel .game-card .tc-m:not(.tc-weekly){margin-right:44px}

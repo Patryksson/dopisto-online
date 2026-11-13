@@ -36,7 +36,7 @@
     const n = Math.round(Math.min(46, Math.max(18, W * H / 26000)));
     for (let i = 0; i < n; i++) flakes.push({ x: Math.random() * W, y: Math.random() * H, r: .8 + Math.random() * 1.7, v: 14 + Math.random() * 26, a: Math.random() * 6.28, s: .4 + Math.random() * .8 });
   }
-  function onHome() { return !!document.querySelector('.page.home'); }
+  function onHome() { return true; }   // sněží na všech obrazovkách
   function frame(t) {
     raf = 0;
     if (!cv || document.hidden || !onHome()) { if (ctx) ctx.clearRect(0, 0, W, H); poll(); return; }
@@ -74,7 +74,7 @@
     window.XMAS = on;
     document.documentElement.classList.toggle('xmas', on);
     const logo = document.querySelector('.page.home .logo');
-    if (logo) { const s = on ? 'xmas/logo-hat.webp' : 'logo.png'; if (!logo.src.endsWith(s)) logo.src = s; }
+    if (logo) { const s = on ? 'xmas/logo-hat.webp' : 'logo.png'; if (!logo.src.endsWith(s)) { logo.src = s; } }
     const tg = document.querySelector('.page.home .tagline'); if (tg) tg.textContent = on ? 'Vánoční edice' : 'Slovní online duel';
     const bt = document.querySelector('.page.home .bc-title');
     if (bt) bt.innerHTML = on ? '<img class="xm-ico" decoding="async" src="xmas/tree.webp" alt="" width="14" height="16"> Vánoční bonus' : '✦ Denní bonus';
